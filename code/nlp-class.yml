@@ -1,0 +1,14 @@
+name: nlp-class
+channels:
+  - defaults
+  - pytorch
+dependencies:
+  - python=3.9.*
+  - pip
+  - numpy=1.19.*
+  - pytorch=1.9.*
+  - scipy=1.5.*
+  - tqdm
+  - pip:
+      - more-itertools
+      - torchtyping
