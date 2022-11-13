@@ -210,8 +210,8 @@ class HiddenMarkovModel(nn.Module):
 
         n = len(sent)
 
-        print([self.vocab[i] for (i,j) in sent])
-        print([self.tagset[j] for (i,j) in sent])
+        # print([self.vocab[i] for (i,j) in sent])
+        # print([self.tagset[j] for (i,j) in sent])
 
         # for i in range(self.k):
         #     for j in range(self.k):
@@ -220,24 +220,14 @@ class HiddenMarkovModel(nn.Module):
         #     for j in range(self.V):
         #         print((i, j), self.tagset[i], " to ", self.vocab[j])
 
+        assert sent[0][1] == self.bos_t  # ensure that the sent starts with <BOS> tag
         alpha[0][self.bos_t] = 1
 
-        # setting A and B as per the given excel example
-        self.printAB()
+        for j in range(1, n-2):
+            alpha[j+1] = (alpha[j] @ self.A) * self.B[:, sent[j+1][0]]
 
-        for j in range(1, n-1):
-            intermediate_res = alpha[j-1] @ self.A
-            # if self.vocab[sent[j][0]] == '_EOS_WORD_':
-            #     col = self.vocab.index('_EOS_WORD_')
-            #     print(col, type(col))
-            # else:
-            #     col = self.vocab[sent[j][0]]
-            #     print(col, type(col))
-            alpha[j] = intermediate_res * self.B[:, int(self.vocab[sent[j][0]])]
-            # print(intermediate_res.shape, self.B.shape)
-        z = alpha[n-1][self.eos_t]
-        return z
-        # raise NotImplementedError
+        Z = alpha[n-1][self.eos_t]
+        return Z
 
     def viterbi_tagging(self, sentence: Sentence, corpus: TaggedCorpus) -> Sentence:
         """Find the most probable tagging for the given sentence, according to the
