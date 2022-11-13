@@ -116,7 +116,7 @@ class HiddenMarkovModel(nn.Module):
 
         # See the reading handout section "Parametrization.""
 
-        ThetaB = 0.01*torch.rand(self.k, self.d)    
+        ThetaB = 0.01*torch.rand(self.k, self.d)
         self._ThetaB = Parameter(ThetaB)    # params used to construct emission matrix
 
         WA = 0.01*torch.rand(1 if self.unigram # just one row if unigram model
@@ -202,12 +202,42 @@ class HiddenMarkovModel(nn.Module):
 
         sent = self._integerize_sentence(sentence, corpus)
 
+        # you fill this in!
         # The "nice" way to construct alpha is by appending to a List[Tensor] at each
         # step.  But to better match the notation in the handout, we'll instead preallocate
         # a list of length n+2 so that we can assign directly to alpha[j].
-        alpha = [torch.empty(self.k) for _ in sent]  
+        alpha = [torch.empty(self.k) for _ in sent]
 
-        raise NotImplementedError   # you fill this in!
+        n = len(sent)
+
+        print([self.vocab[i] for (i,j) in sent])
+        print([self.tagset[j] for (i,j) in sent])
+
+        # for i in range(self.k):
+        #     for j in range(self.k):
+        #         print((i, j), self.tagset[i]," to ", self.tagset[j])
+        # for i in range(self.k):
+        #     for j in range(self.V):
+        #         print((i, j), self.tagset[i], " to ", self.vocab[j])
+
+        alpha[0][self.bos_t] = 1
+
+        # setting A and B as per the given excel example
+        self.printAB()
+
+        for j in range(1, n-1):
+            intermediate_res = alpha[j-1] @ self.A
+            # if self.vocab[sent[j][0]] == '_EOS_WORD_':
+            #     col = self.vocab.index('_EOS_WORD_')
+            #     print(col, type(col))
+            # else:
+            #     col = self.vocab[sent[j][0]]
+            #     print(col, type(col))
+            alpha[j] = intermediate_res * self.B[:, int(self.vocab[sent[j][0]])]
+            # print(intermediate_res.shape, self.B.shape)
+        z = alpha[n-1][self.eos_t]
+        return z
+        # raise NotImplementedError
 
     def viterbi_tagging(self, sentence: Sentence, corpus: TaggedCorpus) -> Sentence:
         """Find the most probable tagging for the given sentence, according to the
