@@ -243,7 +243,7 @@ class HiddenMarkovModel(nn.Module):
         n = len(sent)
 
         alpha = [-float("Inf") * torch.ones(self.k) for _ in sent]  # setting alpha to -inf
-        backpointers = {}  # dictionary storing index to the tag
+        backpointers = [None for _ in sent]  # dictionary storing index to the tag
         backpointers[0] = alpha[0]
 
         assert sent[0][1] == self.bos_t  # ensure that the sent starts with <BOS> tag
@@ -254,6 +254,15 @@ class HiddenMarkovModel(nn.Module):
             max_prob = torch.max(alpha[j-1].reshape(-1,1) + torch.log(self.A) + torch.log(self.B[:, curr_word]).reshape(-1, 1), 0)
             alpha[j] = max_prob[0]
             backpointers[j] = max_prob[1]
+        # print(backpointers)
+
+        # support for eos tag
+        # sent[-1] is the <EOS>
+        # sent[-2] is the last word before <EOS>
+        max_prob = torch.max(alpha[-2].reshape(-1, 1) + torch.log(self.A), 0)
+        # backpointer from last word to the <EOS> tag
+        alpha[-1] = max_prob[0]
+        backpointers[n-1] = max_prob[1]
         print(backpointers)
         exit()
 
