@@ -264,9 +264,21 @@ class HiddenMarkovModel(nn.Module):
         alpha[-1] = max_prob[0]
         backpointers[n-1] = max_prob[1]
         print(backpointers)
-        exit()
+        # exit()
 
-        # todo follow backpointers to find the best sequence
+        # follow backpointers to find the best sequence
+        previous_tag = self.eos_t
+        words = []
+        for i in range(n-3):  # no need to traverse for <BOS>, <EOS>
+            word = self.vocab[sent[i][0]]
+            tag = self.tagset[previous_tag]
+            previous_tag = backpointers[i][previous_tag].item()
+            words.append((word, tag))
+            print(f"Current: {tag}, Prev: {previous_tag}")
+
+        sent = Sentence(words)
+        return sent
+
 
     def train(self,
               corpus: TaggedCorpus,
