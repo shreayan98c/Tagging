@@ -221,6 +221,7 @@ class HiddenMarkovModel(nn.Module):
         #         print((i, j), self.tagset[i], " to ", self.vocab[j])
 
         assert sent[0][1] == self.bos_t  # ensure that the sent starts with <BOS> tag
+        assert sent[-1][1] == self.eos_t  # ensure that the sent ends with <EOS> tag
         alpha[0][self.bos_t] = 1
 
         for j in range(1, n-2):
@@ -246,6 +247,7 @@ class HiddenMarkovModel(nn.Module):
         backpointers = [torch.empty(self.k) for _ in sent]  # dictionary storing index to the tag
 
         assert sent[0][1] == self.bos_t  # ensure that the sent starts with <BOS> tag
+        assert sent[-1][1] == self.eos_t  # ensure that the sent ends with <EOS> tag
 
         # support for bos tag
         mu[0][self.bos_t] = 0
@@ -255,7 +257,6 @@ class HiddenMarkovModel(nn.Module):
             max_prob = torch.max(mu[j-1].reshape(-1, 1) + torch.log(self.A) + torch.log(self.B[:, curr_word]).reshape(-1, 1), 0)
             mu[j] = max_prob[0]
             backpointers[j] = max_prob[1]
-        # print(backpointers)
 
         # support for eos tag
         # sent[-1] is the <EOS>
@@ -264,8 +265,6 @@ class HiddenMarkovModel(nn.Module):
         # backpointer from last word to the <EOS> tag
         mu[-1] = max_prob[0]
         backpointers[-1] = max_prob[1]
-        # print(backpointers)
-        # exit()
 
         # follow backpointers to find the best sequence
         previous_tag = self.eos_t
