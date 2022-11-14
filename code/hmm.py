@@ -239,7 +239,35 @@ class HiddenMarkovModel(nn.Module):
 
         sent = self._integerize_sentence(sentence, corpus)
 
-        raise NotImplementedError   # you fill this in!
+        # you fill this in!
+        n = len(sent)
+
+        alpha = [-float("Inf") * torch.ones(self.k) for _ in sent]  # setting alpha to -inf
+
+        assert sent[0][1] == self.bos_t  # ensure that the sent starts with <BOS> tag
+        alpha[0][self.bos_t] = 1
+
+        for j in range(1, n-2):
+            for curr_layer_tag in range(self.k):
+                for prev_layer_tag in range(self.k):
+                    print(f"{prev_layer_tag} to {curr_layer_tag}")
+                    print(f"{self.tagset[prev_layer_tag]} to {self.tagset[curr_layer_tag]}")
+
+                    self.printAB()
+
+                    # calc prob for previous layer tag to the current layer tag
+                    p = self.A[prev_layer_tag][curr_layer_tag] * self.B[curr_layer_tag][sent[j+1][0]]
+                    print(p)
+
+                    # keep a running maxima
+                    if alpha[j+1][curr_layer_tag] < alpha[j][prev_layer_tag] * p:
+                        # update the maximum
+                        alpha[j+1][curr_layer_tag] = alpha[j][prev_layer_tag] * p
+
+                        # TODO assign backpointers
+
+                    exit()
+        exit()
 
     def train(self,
               corpus: TaggedCorpus,
