@@ -242,43 +242,43 @@ class HiddenMarkovModel(nn.Module):
         # you fill this in!
         n = len(sent)
 
-        alpha = [-float("Inf") * torch.ones(self.k) for _ in sent]  # setting alpha to -inf
-        backpointers = [None for _ in sent]  # dictionary storing index to the tag
-        backpointers[0] = alpha[0]
+        mu = [-float("Inf") * torch.ones(self.k) for _ in sent]  # setting mu to -inf
+        backpointers = [torch.empty(self.k) for _ in sent]  # dictionary storing index to the tag
 
         assert sent[0][1] == self.bos_t  # ensure that the sent starts with <BOS> tag
-        alpha[0][self.bos_t] = 0
+
+        # support for bos tag
+        mu[0][self.bos_t] = 0
 
         for j in range(1, n-1):
             (curr_word, curr_tag) = sent[j]
-            max_prob = torch.max(alpha[j-1].reshape(-1,1) + torch.log(self.A) + torch.log(self.B[:, curr_word]).reshape(-1, 1), 0)
-            alpha[j] = max_prob[0]
+            max_prob = torch.max(mu[j-1].reshape(-1, 1) + torch.log(self.A) + torch.log(self.B[:, curr_word]).reshape(-1, 1), 0)
+            mu[j] = max_prob[0]
             backpointers[j] = max_prob[1]
         # print(backpointers)
 
         # support for eos tag
         # sent[-1] is the <EOS>
         # sent[-2] is the last word before <EOS>
-        max_prob = torch.max(alpha[-2].reshape(-1, 1) + torch.log(self.A), 0)
+        max_prob = torch.max(mu[-2].reshape(-1, 1) + torch.log(self.A), 0)
         # backpointer from last word to the <EOS> tag
-        alpha[-1] = max_prob[0]
-        backpointers[n-1] = max_prob[1]
-        print(backpointers)
+        mu[-1] = max_prob[0]
+        backpointers[-1] = max_prob[1]
+        # print(backpointers)
         # exit()
 
         # follow backpointers to find the best sequence
         previous_tag = self.eos_t
         words = []
-        for i in range(n-3):  # no need to traverse for <BOS>, <EOS>
+        for i in range(n-1, -1, -1):
             word = self.vocab[sent[i][0]]
             tag = self.tagset[previous_tag]
-            previous_tag = backpointers[i][previous_tag].item()
+            previous_tag = backpointers[i][previous_tag]
             words.append((word, tag))
-            print(f"Current: {tag}, Prev: {previous_tag}")
-
+            # print(f"Current: {tag}, Prev: {previous_tag}")
+        words.reverse()
         sent = Sentence(words)
         return sent
-
 
     def train(self,
               corpus: TaggedCorpus,
