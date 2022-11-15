@@ -21,6 +21,7 @@ from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
 from tqdm import tqdm # type: ignore
 
+from logsumexp_safe import logsumexp_new
 from corpus import (BOS_TAG, BOS_WORD, EOS_TAG, EOS_WORD, Sentence, Tag,
                     TaggedCorpus, Word)
 from integerize import Integerizer
@@ -160,6 +161,8 @@ class HiddenMarkovModel(nn.Module):
         self.B = B.clone()
         self.B[self.eos_t, :] = 0        # but don't guess: EOS_TAG can't emit any column's word (only EOS_WORD)
         self.B[self.bos_t, :] = 0        # same for BOS_TAG (although BOS_TAG will already be ruled out by other factors)
+        self.A = self.A + 1e-45
+        self.B = self.B + 1e-45
 
 
     def printAB(self) -> None:
@@ -206,7 +209,8 @@ class HiddenMarkovModel(nn.Module):
         # The "nice" way to construct alpha is by appending to a List[Tensor] at each
         # step.  But to better match the notation in the handout, we'll instead preallocate
         # a list of length n+2 so that we can assign directly to alpha[j].
-        alpha = [torch.empty(self.k) for _ in sent]
+        # alpha = [torch.empty(self.k) for _ in sent]  # 0
+        alpha = [-float("Inf") * torch.ones(self.k) for _ in sent]  # -ve infinity
 
         n = len(sent)
 
@@ -222,13 +226,30 @@ class HiddenMarkovModel(nn.Module):
 
         assert sent[0][1] == self.bos_t  # ensure that the sent starts with <BOS> tag
         assert sent[-1][1] == self.eos_t  # ensure that the sent ends with <EOS> tag
-        alpha[0][self.bos_t] = 1
+        alpha[0][self.bos_t] = 0
 
-        for j in range(1, n-2):
-            alpha[j+1] = (alpha[j] @ self.A) * self.B[:, sent[j+1][0]]
+        # Z = A . B
+        # log Z = log A + log B
 
-        Z = alpha[n-1][self.eos_t]
-        return Z
+        for j in range(1, n-1):
+            (curr_word, curr_tag) = sent[j]
+
+            if not curr_tag:
+                # unsupervised training or partially supervised training
+                alpha[j] = logsumexp_new((alpha[j-1].reshape(-1, 1) + torch.log(self.A)) + torch.log(self.B[:, curr_word].reshape(-1, 1)),
+                                         dim=0, safe_inf=True)
+            else:
+                # supervised training if the tag is present
+                alpha[j] = logsumexp_new((alpha[j-1] + torch.log(self.A[:, curr_tag])) + torch.log(self.B[curr_word, curr_tag]),
+                                         dim=0, safe_inf=True)
+
+        alpha[n-1][self.eos_t] = logsumexp_new(alpha[n-2] + self.A[:, self.eos_t],
+                                               dim=0, keepdim=True, safe_inf=True)
+
+        # Z = alpha[n-1][self.eos_t]
+        # return Z
+        log_Z = alpha[n-1][self.eos_t]
+        return log_Z
 
     def viterbi_tagging(self, sentence: Sentence, corpus: TaggedCorpus) -> Sentence:
         """Find the most probable tagging for the given sentence, according to the
@@ -254,23 +275,26 @@ class HiddenMarkovModel(nn.Module):
 
         for j in range(1, n-1):
             (curr_word, curr_tag) = sent[j]
-            max_prob = torch.max(mu[j-1].reshape(-1, 1) + torch.log(self.A) + torch.log(self.B[:, curr_word]).reshape(-1, 1), 0)
-            mu[j] = max_prob[0]
-            backpointers[j] = max_prob[1]
+            max_prob = torch.max((mu[j-1].reshape(-1, 1) + torch.log(self.A)) + torch.log(self.B[:, curr_word]).reshape(-1, 1), 0)
+            # mu[j] = max_prob[0]
+            # backpointers[j] = max_prob[1]
+            mu[j], backpointers[j] = max_prob
 
         # support for eos tag
         # sent[-1] is the <EOS>
         # sent[-2] is the last word before <EOS>
-        max_prob = torch.max(mu[-2].reshape(-1, 1) + torch.log(self.A), 0)
+        max_prob = torch.max(mu[n-2].reshape(-1, 1) + torch.log(self.A), 0)
         # backpointer from last word to the <EOS> tag
-        mu[-1] = max_prob[0]
-        backpointers[-1] = max_prob[1]
+        # mu[n-1] = max_prob[0]
+        # backpointers[n-1] = max_prob[1]
+        mu[n-1], backpointers[n-1] = max_prob
 
         # follow backpointers to find the best sequence
         previous_tag = self.eos_t
         words = []
         for i in range(n-1, -1, -1):
-            word = self.vocab[sent[i][0]]
+            curr_word, curr_tag = sent[i]
+            word = self.vocab[curr_word]
             tag = self.tagset[previous_tag]
             previous_tag = backpointers[i][previous_tag]
             words.append((word, tag))
