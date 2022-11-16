@@ -27,8 +27,12 @@ lexicon = build_lexicon(icsup, one_hot=True)   # one-hot lexicon: separate param
 hmm = HiddenMarkovModel(icsup.tagset, icsup.vocab, lexicon)
 
 log.info("*** Current A, B matrices (computed by softmax from small random parameters)")
-hmm.updateAB()   # compute the matrices from the initial parameters (this would normally happen during training).
-                 # An alternative is to set them directly to some spreadsheet values you'd like to try.
+# hmm.updateAB()   # compute the matrices from the initial parameters (this would normally happen during training).
+#                  # An alternative is to set them directly to some spreadsheet values you'd like to try.
+# Alternative:
+hmm.A = torch.Tensor([[0.8, 0.1, 0.1, 0], [0.1, 0.8, 0.1, 0], [0, 0, 0, 0], [0.5, 0.5, 0, 0]])
+hmm.B = torch.Tensor([[0.7, 0.2, 0.1], [0.1, 0.2, 0.7], [0, 0, 0], [0, 0, 0]])
+
 hmm.printAB()
 
 # While training on ice cream, we will just evaluate the cross-entropy
