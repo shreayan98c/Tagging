@@ -276,18 +276,18 @@ class HiddenMarkovModel(nn.Module):
         for j in range(1, n-1):
             (curr_word, curr_tag) = sent[j]
             max_prob = torch.max((mu[j-1].reshape(-1, 1) + torch.log(self.A)) + torch.log(self.B[:, curr_word]).reshape(-1, 1), 0)
-            # mu[j] = max_prob[0]
-            # backpointers[j] = max_prob[1]
-            mu[j], backpointers[j] = max_prob
+            # mu[j], backpointers[j] = max_prob
+            mu[j] = max_prob.values
+            backpointers[j] = max_prob.indices
 
         # support for eos tag
         # sent[-1] is the <EOS>
         # sent[-2] is the last word before <EOS>
         max_prob = torch.max(mu[n-2].reshape(-1, 1) + torch.log(self.A), 0)
         # backpointer from last word to the <EOS> tag
-        # mu[n-1] = max_prob[0]
-        # backpointers[n-1] = max_prob[1]
-        mu[n-1], backpointers[n-1] = max_prob
+        # mu[n-1], backpointers[n-1] = max_prob
+        mu[n-1] = max_prob.values
+        backpointers[n-1] = max_prob.indices
 
         # follow backpointers to find the best sequence
         previous_tag = self.eos_t
