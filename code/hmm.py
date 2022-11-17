@@ -236,7 +236,7 @@ class HiddenMarkovModel(nn.Module):
 
             if not curr_tag:
                 # unsupervised training or partially supervised training
-                alpha[j] = logsumexp_new((alpha[j-1].reshape(-1, 1) + torch.log(self.A)) + torch.log(self.B[:, curr_word].reshape(-1, 1)),
+                alpha[j] = logsumexp_new((alpha[j-1].reshape(-1, 1) + torch.log(self.A)) + torch.log(self.B[:, curr_word]),
                                          dim=0, safe_inf=True)
             else:
                 # supervised training if the tag is present

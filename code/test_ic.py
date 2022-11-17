@@ -27,11 +27,12 @@ lexicon = build_lexicon(icsup, one_hot=True)   # one-hot lexicon: separate param
 hmm = HiddenMarkovModel(icsup.tagset, icsup.vocab, lexicon)
 
 log.info("*** Current A, B matrices (computed by softmax from small random parameters)")
-# hmm.updateAB()   # compute the matrices from the initial parameters (this would normally happen during training).
+hmm.updateAB()   # compute the matrices from the initial parameters (this would normally happen during training).
 #                  # An alternative is to set them directly to some spreadsheet values you'd like to try.
 # Alternative:
-hmm.A = torch.Tensor([[0.8, 0.1, 0.1, 0], [0.1, 0.8, 0.1, 0], [0, 0, 0, 0], [0.5, 0.5, 0, 0]])
-hmm.B = torch.Tensor([[0.7, 0.2, 0.1], [0.1, 0.2, 0.7], [0, 0, 0], [0, 0, 0]])
+# hmm.A = torch.Tensor([[0.8, 0.1, 0.1, 0], [0.1, 0.8, 0.1, 0], [0, 0, 0, 0], [0.5, 0.5, 0, 0]])
+# hmm.B = torch.Tensor([[0.7, 0.2, 0.1, 0], [0.1, 0.2, 0.7, 0], [0, 0, 0, 0], [0, 0, 0, 0]])
+
 
 hmm.printAB()
 
@@ -39,7 +40,7 @@ hmm.printAB()
 # on the training data itself (icsup), since we are interested in watching it improve.
 log.info("*** Supervised training on icsup")
 cross_entropy_loss = lambda model: model_cross_entropy(model, icsup)
-hmm.train(corpus=icsup, loss=cross_entropy_loss, 
+hmm.train(corpus=icsup, loss=cross_entropy_loss,
           minibatch_size=10, evalbatch_size=500, lr=0.01, tolerance=0.0001)
 
 log.info("*** A, B matrices after training on icsup (should approximately "
@@ -54,7 +55,7 @@ icraw = TaggedCorpus(Path("icraw"), tagset=icsup.tagset, vocab=icsup.vocab)
 tagger_write_output(hmm, icraw, Path("icraw.output"))  # calls hmm.viterbi_tagging on each sentence
 os.system("cat icraw.output")   # print the file we just created, and remove it
 
-# Now let's use the forward algorithm to see what the model thinks about 
+# Now let's use the forward algorithm to see what the model thinks about
 # the probability of the spreadsheet "sentence."
 log.info("*** Forward algorithm on icraw (should approximately match iteration 0 "
              "on spreadsheet)")
