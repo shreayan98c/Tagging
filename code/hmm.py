@@ -275,7 +275,7 @@ class HiddenMarkovModel(nn.Module):
 
         for j in range(1, n-1):
             (curr_word, curr_tag) = sent[j]
-            max_prob = torch.max((mu[j-1].reshape(-1, 1) + torch.log(self.A)) + torch.log(self.B[:, curr_word]).reshape(-1, 1), 0)
+            max_prob = torch.max((mu[j-1].reshape(-1, 1) + torch.log(self.A)) + torch.log(self.B[:, curr_word]), 0)
             # mu[j], backpointers[j] = max_prob
             mu[j] = max_prob.values
             backpointers[j] = max_prob.indices
