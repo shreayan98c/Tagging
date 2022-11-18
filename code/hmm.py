@@ -235,7 +235,7 @@ class HiddenMarkovModel(nn.Module):
             (curr_word, curr_tag) = sent[j]
             alpha_transition = alpha[j-1].reshape(-1, 1) + torch.log(self.A)
 
-            if not prev_tag:
+            if prev_tag is None:
                 # unsupervised training or partially supervised training
                 if curr_tag == self.eos_t:
                     alpha[j] = logsumexp_new(alpha_transition, dim=0, safe_inf=True)
@@ -246,7 +246,7 @@ class HiddenMarkovModel(nn.Module):
                 if curr_tag == self.eos_t:
                     alpha[j] = alpha_transition[prev_tag, :]
                 else:
-                    alpha[j] = logsumexp_new(alpha_transition[prev_tag], dim=0, safe_inf=True) + torch.log(self.B[:, curr_word])
+                    alpha[j] = alpha_transition[prev_tag] + torch.log(self.B[:, curr_word])
 
         # Z = alpha[n-1][self.eos_t]
         # return Z
