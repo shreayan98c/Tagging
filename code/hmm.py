@@ -21,7 +21,7 @@ from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
 from tqdm import tqdm # type: ignore
 
-from logsumexp_safe import logsumexp_new
+from logsumexp_safe import *
 from corpus import (BOS_TAG, BOS_WORD, EOS_TAG, EOS_WORD, Sentence, Tag,
                     TaggedCorpus, Word)
 from integerize import Integerizer
@@ -231,20 +231,23 @@ class HiddenMarkovModel(nn.Module):
         # Z = A . B
         # log Z = log A + log B
 
-        for j in range(1, n-1):
+        for j in range(1, n):
+            (prev_word, prev_tag) = sent[j-1]
             (curr_word, curr_tag) = sent[j]
+            alpha_transition = alpha[j-1].reshape(-1, 1) + torch.log(self.A)
 
-            if not curr_tag:
+            if not prev_tag:
                 # unsupervised training or partially supervised training
-                alpha[j] = logsumexp_new((alpha[j-1].reshape(-1, 1) + torch.log(self.A)) + torch.log(self.B[:, curr_word]),
-                                         dim=0, safe_inf=True)
+                if curr_tag == self.eos_t:
+                    alpha[j] = logsumexp_new(alpha_transition, dim=0, safe_inf=True)
+                else:
+                    alpha[j] = logsumexp_new(alpha_transition, dim=0, safe_inf=True) + torch.log(self.B[:, curr_word])
             else:
                 # supervised training if the tag is present
-                alpha[j] = logsumexp_new((alpha[j-1] + torch.log(self.A[:, curr_tag])) + torch.log(self.B[curr_word, curr_tag]),
-                                         dim=0, safe_inf=True)
-
-        alpha[n-1][self.eos_t] = logsumexp_new(alpha[n-2] + self.A[:, self.eos_t],
-                                               dim=0, keepdim=True, safe_inf=True)
+                if curr_tag == self.eos_t:
+                    alpha[j] = alpha_transition[prev_tag, :]
+                else:
+                    alpha[j] = logsumexp_new(alpha_transition[prev_tag], dim=0, safe_inf=True) + torch.log(self.B[:, curr_word])
 
         # Z = alpha[n-1][self.eos_t]
         # return Z
