@@ -159,8 +159,10 @@ class HiddenMarkovModel(nn.Module):
         WB = self._ThetaB @ self._E.t()  # inner products of tag weights and word embeddings
         B = F.softmax(WB, dim=1)         # run softmax on those inner products to get emission distributions
         self.B = B.clone()
-        self.B[self.eos_t, :] = -inf  # but don't guess: EOS_TAG can't emit any column's word (only EOS_WORD)
-        self.B[self.bos_t, :] = -inf  # same for BOS_TAG (although BOS_TAG will already be ruled out by other factors)
+        self.B[self.eos_t, :] = 0  # but don't guess: EOS_TAG can't emit any column's word (only EOS_WORD)
+        self.B[self.bos_t, :] = 0  # same for BOS_TAG (although BOS_TAG will already be ruled out by other factors)
+        self.A = self.A + 1e-45
+        self.B = self.B + 1e-45
 
     def printAB(self) -> None:
         """Print the A and B matrices in a more human-readable format (tab-separated)."""
