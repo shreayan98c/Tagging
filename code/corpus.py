@@ -22,9 +22,9 @@ from integerize import Integerizer
 
 log = logging.getLogger(Path(__file__).stem)  # For usage, see findsim.py in earlier assignment.
 
-Word = NewType('Word', str)          # subtype of str
-Tag = NewType('Tag', str)            # subtype of str
-TWord = Tuple[Word, Optional[Tag]]   # a (word, tag) pair where the tag might be None
+Word = NewType('Word', str)  # subtype of str
+Tag = NewType('Tag', str)  # subtype of str
+TWord = Tuple[Word, Optional[Tag]]  # a (word, tag) pair where the tag might be None
 Sentence = List[TWord]
 
 # Special 
@@ -37,6 +37,7 @@ EOS_TAG: Tag = Tag("_EOS_TAG_")
 # Seed the random number generator consistently, for the sake of
 # draw_sentences_forever.
 import random
+
 random.seed(1234)
 
 
@@ -77,9 +78,9 @@ class TaggedCorpus:
     """
 
     def __init__(self, *files: Path,
-                 tagset: Optional[Integerizer[Tag]] = None, 
+                 tagset: Optional[Integerizer[Tag]] = None,
                  vocab: Optional[Integerizer[Word]] = None,
-                 vocab_threshold: int = 1, 
+                 vocab_threshold: int = 1,
                  add_oov: bool = True):
         """Wrap the given set of files as a corpus. 
         Use the tagset and/or vocab from the parent corpus, if given.
@@ -97,17 +98,22 @@ class TaggedCorpus:
 
         super().__init__()
         self.files = files
+        # adding common suffixes and affixes
+        self.common_affixes = ["dis", "in", "im", "il", "ir", "un", "over", "mis", "out", "be", "co", "de", "inter",
+                               "pre", "sub", "trans", "under", "anti", "auto", "counter", "ex", "hyper", "mis", "sub",
+                               "ed", "ing", "s", "es", "ly", "ness", "ise", "ence", "en", "tion", "sion", "er", "er",
+                               "ment", "", "ant", "ent", "al", "ry", "ery", ]
 
         # Read the corpus to harvest the tagset and vocabulary, if needed
         if tagset is None or vocab is None:
             self.tagset: Integerizer[Tag] = Integerizer()
             self.vocab: Integerizer[Word] = Integerizer()
-        
+
             word_counts: Counter[Word] = Counter()
             for word, tag in self.get_tokens(oovs=False):
-                if word == EOS_WORD:      # note: word will never be BOS_WORD
-                    continue              # skip EOS for purposes of getting vocab
-                word_counts[word] += 1    # count words to see later if we pass the threshold
+                if word == EOS_WORD:  # note: word will never be BOS_WORD
+                    continue  # skip EOS for purposes of getting vocab
+                word_counts[word] += 1  # count words to see later if we pass the threshold
                 if tag is not None:
                     self.tagset.add(tag)  # no threshold for tags
             log.info(f"Read {sum(word_counts.values())} tokens from {', '.join(file.name for file in files)}")
@@ -159,7 +165,7 @@ class TaggedCorpus:
             self._num_sentences = sum(1 for _ in self)
             return self._num_sentences
 
-    def num_tokens(self) -> int: 
+    def num_tokens(self) -> int:
         """Number of tokens in the corpus, including EOS tokens."""
         self._num_tokens: int
         try:
@@ -177,16 +183,16 @@ class TaggedCorpus:
                 for line in f:
                     for token in line.split():
                         word: Word
-                        tag: Optional[Tag]                    # declare type to help the type checker
+                        tag: Optional[Tag]  # declare type to help the type checker
                         if "/" in token:
-                            w, t = token.split("/")   
-                            word, tag = Word(w), Tag(t)       # for example, "caviar/Noun"
+                            w, t = token.split("/")
+                            word, tag = Word(w), Tag(t)  # for example, "caviar/Noun"
                         else:
-                            word, tag = Word(token), None     # for example, "caviar" without a tag
+                            word, tag = Word(token), None  # for example, "caviar" without a tag
                         if (not oovs) or word in self.vocab:
-                            yield word, tag       # keep the word
+                            yield word, tag  # keep the word
                         else:
-                            yield OOV_WORD, tag   # replace this out-of-vocabulary word with OOV
+                            yield OOV_WORD, tag  # replace this out-of-vocabulary word with OOV
                     yield EOS_WORD, EOS_TAG  # Every line in the file implicitly ends with EOS.
 
     def get_sentences(self) -> Iterable[Sentence]:
@@ -205,7 +211,6 @@ class TaggedCorpus:
                 # reset for the next sentence (if any)
                 sentence = Sentence([(BOS_WORD, BOS_TAG)])
 
-
     def draw_sentences_forever(self, randomize: bool = True) -> Iterable[Sentence]:
         """Infinite iterable over sentences drawn from the corpus.  We iterate over
         all the sentences, then do it again, ad infinitum.  This is useful for 
@@ -217,7 +222,7 @@ class TaggedCorpus:
         so at least the randomness will be consistent across runs.)
         """
         sentences = peekable(self.get_sentences())
-        assert sentences      # there should be at least one sentence.  (This test uses peekability.)
+        assert sentences  # there should be at least one sentence.  (This test uses peekability.)
         if not randomize:
             import itertools
             return itertools.cycle(sentences)  # repeat forever
@@ -226,7 +231,6 @@ class TaggedCorpus:
             while True:
                 for sentence in random.sample(pool, len(pool)):
                     yield sentence
-
 
     # Utility methods for integerizing the objects that are returned above.
 
@@ -238,9 +242,9 @@ class TaggedCorpus:
 
     def integerize_word(self, word: Word) -> int:
         w = self.vocab.index(word)
-        if w is None: 
+        if w is None:
             w = self.oov_w
-            if w is None:   # OOV_WORD needs to be in our tagset
+            if w is None:  # OOV_WORD needs to be in our tagset
                 raise KeyError(word, self, "This word is not in the vocab of this corpus, nor is an OOV symbol")
         return w
 

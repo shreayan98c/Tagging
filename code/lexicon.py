@@ -13,11 +13,12 @@ from corpus import TaggedCorpus, BOS_WORD, EOS_WORD, OOV_WORD, Word
 
 log = logging.getLogger(Path(__file__).stem)  # For usage, see findsim.py in earlier assignment.
 
+
 def build_lexicon(corpus: TaggedCorpus,
-                  one_hot: bool =False,
+                  one_hot: bool = False,
                   embeddings_file: Optional[Path] = None,
-                  log_counts: bool =False,
-                  affixes: bool =False) -> torch.Tensor:
+                  log_counts: bool = False,
+                  affixes: bool = False) -> torch.Tensor:
     """Returns a lexicon, implemented as a matrix Tensor
     where each row defines real-valued attributes for one of
     the words in corpus.vocab.  This is a wrapper method that
@@ -26,7 +27,7 @@ def build_lexicon(corpus: TaggedCorpus,
 
     matrices = [torch.empty(len(corpus.vocab), 0)]  # start with no features for each word
 
-    if one_hot: 
+    if one_hot:
         matrices.append(one_hot_lexicon(corpus))
     if embeddings_file is not None:
         matrices.append(embeddings_lexicon(corpus, embeddings_file))
@@ -35,7 +36,8 @@ def build_lexicon(corpus: TaggedCorpus,
     if affixes:
         matrices.append(affixes_lexicon(corpus))
 
-    return torch.cat(matrices, dim=1)   # horizontally concatenate 
+    return torch.cat(matrices, dim=1)  # horizontally concatenate
+
 
 def one_hot_lexicon(corpus: TaggedCorpus) -> torch.Tensor:
     """Return a matrix with as many rows as corpus.vocab, where 
@@ -43,6 +45,7 @@ def one_hot_lexicon(corpus: TaggedCorpus) -> torch.Tensor:
     This allows us to learn features that are specific to the word."""
 
     return torch.eye(len(corpus.vocab))  # identity matrix
+
 
 def embeddings_lexicon(corpus: TaggedCorpus, file: Path) -> torch.Tensor:
     """Return a matrix with as many rows as corpus.vocab, where 
@@ -58,10 +61,10 @@ def embeddings_lexicon(corpus: TaggedCorpus, file: Path) -> torch.Tensor:
 
     vocab = corpus.vocab
     with open(file) as f:
-        filerows, cols = [int(i) for i in next(f).split()]   # first line gives num of rows and cols
-        matrix = torch.empty(len(vocab), cols)   # uninitialized matrix
-        seen: Set[int] = set()                   # the words we've found embeddings for
-        ool_vector = torch.zeros(cols)           # use this for other words if there is no OOL entry
+        filerows, cols = [int(i) for i in next(f).split()]  # first line gives num of rows and cols
+        matrix = torch.empty(len(vocab), cols)  # uninitialized matrix
+        seen: Set[int] = set()  # the words we've found embeddings for
+        ool_vector = torch.zeros(cols)  # use this for other words if there is no OOL entry
         specials = {'BOS': BOS_WORD, 'EOS': EOS_WORD, 'OOV': OOV_WORD}
 
         # Run through the words in the lexicon, keeping those that are in the vocab.
@@ -69,15 +72,15 @@ def embeddings_lexicon(corpus: TaggedCorpus, file: Path) -> torch.Tensor:
             first, *rest = line.strip().split("\t")
             word = Word(first)
             vector = torch.tensor([float(v) for v in rest])
-            assert len(vector) == cols     # check that the file didn't lie about # of cols
+            assert len(vector) == cols  # check that the file didn't lie about # of cols
 
             if word == 'OOL':
-                assert word not in vocab   # make sure there's not an actual word "OOL"
+                assert word not in vocab  # make sure there's not an actual word "OOL"
                 ool_vector = vector
             else:
-                if word in specials:    # map the special word names that may appear in lexicon
-                    word = specials[word]    
-                w = vocab.index(word)   # vocab integer to use as row number
+                if word in specials:  # map the special word names that may appear in lexicon
+                    word = specials[word]
+                w = vocab.index(word)  # vocab integer to use as row number
                 if w is not None:
                     matrix[w] = vector  # fill the vector into that row
                     seen.add(w)
@@ -90,6 +93,7 @@ def embeddings_lexicon(corpus: TaggedCorpus, file: Path) -> torch.Tensor:
     log.info(f"From {file.name}, got embeddings for {len(seen)} of {len(vocab)} word types")
 
     return matrix
+
 
 def log_counts_lexicon(corpus: TaggedCorpus) -> torch.Tensor:
     """Return a feature matrix with as many rows as corpus.vocab, where each
@@ -105,12 +109,13 @@ def log_counts_lexicon(corpus: TaggedCorpus) -> torch.Tensor:
             wt_pair[corpus.vocab.index(w), corpus.tagset.index(t)] += 1
     return torch.log(wt_pair + 1)
 
+
 def affixes_lexicon(corpus: TaggedCorpus) -> torch.Tensor:
     """Return a feature matrix with as many rows as corpus.vocab, where each
     row represents a feature vector for the corresponding word w.
     Each row has binary features for common suffixes and affixes that the
     word has."""
-    vocab, common = corpus.vocab, corpus.common
+    vocab, common = corpus.vocab, corpus.common_affixes
     matrix = torch.empty((len(vocab), len(common)))
     for i, v in enumerate(vocab):
         include = [v.index(c) for c in common]
