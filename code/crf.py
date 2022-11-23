@@ -37,9 +37,9 @@ cuda.manual_seed(69_420)  # No-op if CUDA isn't available
 patch_typeguard()   # makes @typechecked work with torchtyping
 
 ###
-# HMM tagger
+# CRF tagger
 ###
-class CRF(nn.Module):
+class ConditionalRandomFieldModel(nn.Module):
     """An implementation of an HMM, whose emission probabilities are
     parameterized using the word embeddings in the lexicon.
     

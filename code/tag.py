@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from eval import model_cross_entropy, model_error_rate, tagger_write_output
 from hmm import HiddenMarkovModel
+from crf import ConditionalRandomFieldModel
 from lexicon import build_lexicon
 from corpus import TaggedCorpus
 
@@ -125,7 +126,7 @@ def main() -> None:
     model = None
     if args.model is not None:
         if args.crf:
-            raise NotImplementedError   # you fill this in!
+            model = ConditionalRandomFieldModel.load(Path(args.model))
         else:
             model = HiddenMarkovModel.load(Path(args.model))
         assert model is not None
@@ -138,7 +139,9 @@ def main() -> None:
         tagset = train.tagset
         vocab = train.vocab
         if args.crf:
-            raise NotImplementedError   # you fill this in!
+            lexicon = build_lexicon(train, embeddings_file=Path(args.lexicon), log_counts=args.awesome,
+                                    affixes=args.awesome)
+            model = ConditionalRandomFieldModel(tagset, vocab, lexicon, unigram=args.unigram)
         else:
             lexicon = build_lexicon(train, embeddings_file=Path(args.lexicon), log_counts=args.awesome)
             model = HiddenMarkovModel(tagset, vocab, lexicon, unigram=args.unigram)
