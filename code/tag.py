@@ -10,6 +10,7 @@ from crf import ConditionalRandomFieldModel
 from lexicon import build_lexicon
 from corpus import TaggedCorpus
 
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("eval", type=str, help="evalutation file")
@@ -118,6 +119,7 @@ def parse_args() -> argparse.Namespace:
         parser.error("Please provide at least one training file when no model provided")
     return args
 
+
 def main() -> None:
     args = parse_args()
     logging.basicConfig(level=args.logging_level)
@@ -150,7 +152,7 @@ def main() -> None:
     if args.train is not None:
         assert train is not None and model is not None
         # you can instantiate a different development loss depending on the question / which one optimizes performance
-        dev_loss =  lambda x: model_cross_entropy(x, dev)
+        dev_loss = lambda x: model_cross_entropy(x, dev)
         model.train(corpus=train,
                     loss=dev_loss,
                     minibatch_size=args.train_batch_size,
@@ -159,7 +161,7 @@ def main() -> None:
                     reg=args.reg,
                     save_path=args.save_path,
                     tolerance=args.tolerance)
-    tagger_write_output(model, dev, Path(args.eval+".output") if args.output_file is None else args.output_file)
+    tagger_write_output(model, dev, Path(args.eval + ".output") if args.output_file is None else args.output_file)
 
 
 if __name__ == "__main__":
