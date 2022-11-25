@@ -34,6 +34,7 @@ from typing import (Dict, Generic, Hashable, Iterable, Iterator, List, Optional,
 
 T = TypeVar('T', bound=Hashable)  # see https://mypy.readthedocs.io/en/stable/generics.html
 
+
 class Integerizer(Generic[T]):
     """
     A collection of distinct object types, such as a vocabulary or a set of parameter names,
@@ -112,10 +113,12 @@ class Integerizer(Generic[T]):
         return self.index(obj) is not None
 
     @overload
-    def __getitem__(self, index: int) -> T: ...
+    def __getitem__(self, index: int) -> T:
+        ...
 
     @overload
-    def __getitem__(self, index: slice) -> List[T]: ...
+    def __getitem__(self, index: slice) -> List[T]:
+        ...
 
     def __getitem__(self, index: Union[int, slice]) -> Union[T, List[T]]:
         """

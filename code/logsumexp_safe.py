@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
- 
+
 # Author: Jason Eisner <jason@cs.jhu.edu>, December 2020.
 
 # Monkey patch for torch.logaddexp and torch.logsumexp, to correctly zero out
@@ -36,7 +36,8 @@ from typing import Union, Tuple
 from torch.autograd.function import BackwardCFunction
 import torch.autograd as autograd
 
-Dim = Union[int, Tuple[int]]   # probably need more branches to this union to be fully general
+Dim = Union[int, Tuple[int]]  # probably need more branches to this union to be fully general
+
 
 # Custom PyTorch functions.
 # See https://pytorch.org/tutorials/beginner/examples_autograd/two_layer_net_custom_function.html
@@ -45,51 +46,53 @@ Dim = Union[int, Tuple[int]]   # probably need more branches to this union to be
 class LogAddExp_safe_inf(torch.autograd.Function):
     """Implements a torch function that is exactly like logaddexp, 
     but is willing to zero out nans on the backward pass."""
-    
+
     @staticmethod
-    def forward(ctx, input, other): # type: ignore
+    def forward(ctx, input, other):  # type: ignore
         with torch.enable_grad():
-            output = torch.logaddexp_old(input, other) # internal copy of output
+            output = torch.logaddexp_old(input, other)  # internal copy of output
         ctx.save_for_backward(input, other, output)
         return output.clone()
 
     @staticmethod
-    def backward(ctx, grad_output): # type: ignore
+    def backward(ctx, grad_output):  # type: ignore
         input, other, output = ctx.saved_tensors
         grad_input, grad_other = autograd.grad(output, (input, other), grad_output, only_inputs=True)
         if grad_output == 0:
             assert grad_input == 0 or grad_input.isnan()  # everything that was multiplied by 0 should be 0 or nan
             assert grad_other == 0 or grad_other.isnan()
-            return torch.tensor(0.), torch.tensor(0.)   # force to 0, since nans were obtained in this case as 0 * nan
-        else: 
+            return torch.tensor(0.), torch.tensor(0.)  # force to 0, since nans were obtained in this case as 0 * nan
+        else:
             return grad_input, grad_other
+
 
 class LogSumExp_safe_inf(torch.autograd.Function):
     """Implements a torch function that is exactly like logsumexp, 
     but is willing to zero out nans on the backward pass."""
 
     @staticmethod
-    def forward(ctx, input, dim, keepdim = False): # type: ignore
+    def forward(ctx, input, dim, keepdim=False):  # type: ignore
         with torch.enable_grad():
-            output = torch.logsumexp_old(input, dim, keepdim=keepdim) # internal copy of output
+            output = torch.logsumexp_old(input, dim, keepdim=keepdim)  # internal copy of output
         ctx.save_for_backward(input, output)
         ctx.dim = dim
         ctx.keepdim = keepdim
         return output.clone()
 
     @staticmethod
-    def backward(ctx, grad_output): # type: ignore
+    def backward(ctx, grad_output):  # type: ignore
         input, output = ctx.saved_tensors
         grad_input, = autograd.grad(output, input, grad_output, only_inputs=True)
-        mult_by_zero = expand_dims(grad_output==0, input.size(), ctx.dim, keepdim=ctx.keepdim)
+        mult_by_zero = expand_dims(grad_output == 0, input.size(), ctx.dim, keepdim=ctx.keepdim)
         assert torch.logical_or(torch.logical_not(mult_by_zero),  # everything that was mult by 0 should be 0 or nan
-                                torch.logical_or(grad_input==0, grad_input.isnan())).all()
-        return torch.where(mult_by_zero,      # force to 0, since nans were obtained in this case as 0 * nan
+                                torch.logical_or(grad_input == 0, grad_input.isnan())).all()
+        return torch.where(mult_by_zero,  # force to 0, since nans were obtained in this case as 0 * nan
                            torch.tensor(0.), grad_input), None, None
 
+
 # Utility function needed above
-def expand_dims(x: torch.Tensor, 
-                target_size: torch.Size, 
+def expand_dims(x: torch.Tensor,
+                target_size: torch.Size,
                 dim: Dim,
                 keepdim: bool = False) -> torch.Tensor:
     """x is the result of reducing a tensor of target_size 
@@ -117,6 +120,7 @@ def logaddexp_new(input: torch.Tensor, other: torch.Tensor, safe_inf: bool = Fal
     assert isinstance(result, torch.Tensor)
     return result
 
+
 def logsumexp_new(x: torch.Tensor,
                   dim: Dim, *,
                   keepdim: bool = False,
@@ -127,7 +131,7 @@ def logsumexp_new(x: torch.Tensor,
     if safe_inf:
         result = LogSumExp_safe_inf.apply(x, dim, keepdim)
     else:
-        result =  torch.logsumexp_old(x, dim, keepdim=keepdim)
+        result = torch.logsumexp_old(x, dim, keepdim=keepdim)
     assert isinstance(result, torch.Tensor)
     return result
 
@@ -142,7 +146,7 @@ torch.logsumexp = logsumexp_new
 torch.Tensor.logsumexp = logsumexp_new
 
 if __name__ == "__main__":
-    inf=float('inf') 
+    inf = float('inf')
 
     # Some examples with logaddexp
     for a in -inf, 1., inf:
@@ -157,22 +161,22 @@ if __name__ == "__main__":
                     print(f"{'  safe' if safe_inf else 'unsafe'}: "
                           f"d=logaddexp({a}, {b}, {c})={result.item()}"
                           f"\t∂d/∂a={aa.grad.item()}\t∂d/∂b={bb.grad.item()}")
-    
+
     # Some examples with tensorized logsumexp
-    t = torch.tensor([[  2.,   3., -inf, -inf], 
-                      [  5.,   7., -inf, -inf],
+    t = torch.tensor([[2., 3., -inf, -inf],
+                      [5., 7., -inf, -inf],
                       [-inf, -inf, -inf, -inf]], requires_grad=True)
-    u = torch.tensor([[  1.,   0.,   1.,   0.],
-                      [  1.,   0.,   1.,   0.],
-                      [  1.,   0.,   1.,   0.]])
-    
-    for dim in 0, 1, (0,1):
+    u = torch.tensor([[1., 0., 1., 0.],
+                      [1., 0., 1., 0.],
+                      [1., 0., 1., 0.]])
+
+    for dim in 0, 1, (0, 1):
         for keepdim in False, True:
             print(f"\ndim={dim}, keepdim={keepdim} -----")
             for safe_inf in False, True:
-                x = t.clone()   # test that backward works when logsumexp is applied to a non-leaf
+                x = t.clone()  # test that backward works when logsumexp is applied to a non-leaf
                 y = x.logsumexp(dim=dim, keepdim=keepdim, safe_inf=safe_inf)
                 z = u.sum(dim=dim, keepdim=keepdim)  # reduce size to match y
-                (y*z).sum().backward()               # the product with z means that some elements of y's grad_output will be zero
+                (y * z).sum().backward()  # the product with z means that some elements of y's grad_output will be zero
                 print(t.grad)
                 t.grad.data.zero_()
