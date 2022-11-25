@@ -22,7 +22,7 @@ def build_lexicon(corpus: TaggedCorpus,
     """Returns a lexicon, implemented as a matrix Tensor
     where each row defines real-valued attributes for one of
     the words in corpus.vocab.  This is a wrapper method that
-    horizontally concatenates 0 or more matrices that provide 
+    horizontally concatenates 0 or more matrices that provide
     different kinds of attributes."""
 
     matrices = [torch.empty(len(corpus.vocab), 0)]  # start with no features for each word
@@ -40,7 +40,7 @@ def build_lexicon(corpus: TaggedCorpus,
 
 
 def one_hot_lexicon(corpus: TaggedCorpus) -> torch.Tensor:
-    """Return a matrix with as many rows as corpus.vocab, where 
+    """Return a matrix with as many rows as corpus.vocab, where
     each row specifies a one-hot embedding of the corresponding word.
     This allows us to learn features that are specific to the word."""
 
@@ -48,10 +48,10 @@ def one_hot_lexicon(corpus: TaggedCorpus) -> torch.Tensor:
 
 
 def embeddings_lexicon(corpus: TaggedCorpus, file: Path) -> torch.Tensor:
-    """Return a matrix with as many rows as corpus.vocab, where 
+    """Return a matrix with as many rows as corpus.vocab, where
     each row specifies a vector embedding of the corresponding word.
-    
-    The second argument is a lexicon file in the format of Homework 2 and 3, 
+
+    The second argument is a lexicon file in the format of Homework 2 and 3,
     which is used to look up the word embeddings.
 
     The lexicon entries BOS, EOS, OOV, and OOL will be treated appropriately
