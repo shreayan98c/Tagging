@@ -27,7 +27,7 @@ Tag = NewType('Tag', str)  # subtype of str
 TWord = Tuple[Word, Optional[Tag]]  # a (word, tag) pair where the tag might be None
 Sentence = List[TWord]
 
-# Special 
+# Special
 OOV_WORD: Word = Word("_OOV_")
 BOS_WORD: Word = Word("_BOS_WORD_")
 EOS_WORD: Word = Word("_EOS_WORD_")
@@ -66,14 +66,14 @@ class Sentence(List[TWord]):
 
 class TaggedCorpus:
     """Class for a corpus of tagged sentences.
-    This is read from one or more files, where each sentence is 
+    This is read from one or more files, where each sentence is
     a single line in the following format:
         Papa/N ate/V the/D caviar/N with/P a/D spoon/N ./.
     Some or all of the tags may be omitted:
         Papa ate the caviar with a spoon.
 
     The tagset and vocab attributes are publicly visible integerizers.
-    The objects that we return from the corpus will use strings, but 
+    The objects that we return from the corpus will use strings, but
     we provide utility functions to run them through these integerizers.
     """
 
@@ -82,7 +82,7 @@ class TaggedCorpus:
                  vocab: Optional[Integerizer[Word]] = None,
                  vocab_threshold: int = 1,
                  add_oov: bool = True):
-        """Wrap the given set of files as a corpus. 
+        """Wrap the given set of files as a corpus.
         Use the tagset and/or vocab from the parent corpus, if given.
         Otherwise they are derived as follows from the data in `files`:
 
@@ -148,7 +148,7 @@ class TaggedCorpus:
     # Methods for reading the corpus.
     # We return non-integerized versions to make debugging easier;
     # the caller can integerize them using utility methods that we also provide.
-    # 
+    #
     # (But this design is a bit inefficient, since it re-integerizes the same example
     # each time we visit it during SGD.)
 
@@ -213,11 +213,11 @@ class TaggedCorpus:
 
     def draw_sentences_forever(self, randomize: bool = True) -> Iterable[Sentence]:
         """Infinite iterable over sentences drawn from the corpus.  We iterate over
-        all the sentences, then do it again, ad infinitum.  This is useful for 
-        SGD training.  
+        all the sentences, then do it again, ad infinitum.  This is useful for
+        SGD training.
         
-        If randomize is True, then randomize the order of the sentences each time.  
-        This is more in the spirit of SGD, but it forces us to keep all the sentences 
+        If randomize is True, then randomize the order of the sentences each time.
+        This is more in the spirit of SGD, but it forces us to keep all the sentences
         in memory at once.  (Note: This module seeds the random number generator
         so at least the randomness will be consistent across runs.)
         """
@@ -254,3 +254,27 @@ class TaggedCorpus:
 
     def integerize_sentence(self, sentence: Sentence) -> List[Tuple[int, Optional[int]]]:
         return [self.integerize_tword(tword) for tword in sentence]
+
+
+# Helper Functions
+
+def is_supervised(sentence: Sentence) -> bool:
+    """Is the given sentence fully supervised?"""
+    return all(tag is not None for word, tag in sentence)
+
+
+def desupervise(sentence: Sentence) -> Sentence:
+    """Make a new version of the sentence, with the tags removed
+    except for BOS_TAG and EOS_TAG."""
+    return Sentence([(word, tag if tag == BOS_TAG or tag == EOS_TAG else None) for (word, tag) in sentence])
+
+
+def tword_str(tword: TWord) -> str:
+    """Printable representation of a TWord."""
+    word, tag = tword
+    return word if tag is None else f"{word}/{tag}"
+
+
+def sentence_str(sentence: Sentence) -> str:
+    """Printable representation of a Sentence, in the same format that we read."""
+    return " ".join(tword_str(tword) for tword in sentence[1:-1])

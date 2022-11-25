@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # CS465 at Johns Hopkins University.
-# Implementation of Hidden Markov Models.
+# Implementation of CRF Models.
 
 from __future__ import annotations
 import logging
@@ -23,7 +23,7 @@ from tqdm import tqdm  # type: ignore
 
 from logsumexp_safe import *
 from corpus import (BOS_TAG, BOS_WORD, EOS_TAG, EOS_WORD, Sentence, Tag,
-                    TaggedCorpus, Word)
+                    TaggedCorpus, Word, desupervise)
 from integerize import Integerizer
 
 logger = logging.getLogger(Path(__file__).stem)  # For usage, see findsim.py in earlier assignment.
@@ -40,11 +40,11 @@ patch_typeguard()  # makes @typechecked work with torchtyping
 ###
 # CRF tagger
 ###
-class ConditionalRandomFieldModel(nn.Module):
-    """An implementation of an HMM, whose emission probabilities are
+class CRFModel(nn.Module):
+    """An implementation of an CRF, whose emission probabilities are
     parameterized using the word embeddings in the lexicon.
 
-    We'll refer to the HMM states as "tags" and the HMM observations
+    We'll refer to the CRF states as "tags" and the CRF observations
     as "words."
     """
 
@@ -52,16 +52,13 @@ class ConditionalRandomFieldModel(nn.Module):
                  tagset: Integerizer[Tag],
                  vocab: Integerizer[Word],
                  lexicon: Tensor,
-                 unigram: bool = False):
-        """Construct an HMM with initially random parameters, with the
-        given tagset, vocabulary, and lexical features.
+                 unigram=False,
+                 awesome=False,
+                 birnn=False):
+        """Construct an CRF with initially random parameters, with the
+        given tagset, vocabulary, and lexical features."""
 
-        Normally this is an ordinary first-order (bigram) HMM.  The unigram
-        flag says to fall back to a zeroth-order HMM, in which the different
-        positions are generated independently.  (The code could be extended
-        to support higher-order HMMs: trigram HMMs used to be popular.)"""
-
-        super().__init__()  # type: ignore # pytorch nn.Module does not have type annotations
+        super().__init__()
 
         # We'll use the variable names that we used in the reading handout, for
         # easy reference.  (It's typically good practice to use more descriptive names.)
@@ -77,6 +74,8 @@ class ConditionalRandomFieldModel(nn.Module):
         self.V = len(vocab) - 2  # number of word types (not counting EOS_WORD and BOS_WORD)
         self.d = lexicon.size(1)  # dimensionality of a word's embedding in attribute space
         self.unigram = unigram  # do we fall back to a unigram model?
+        self.awesome = awesome  # further improvements
+        self.birnn = birnn
 
         self.tagset = tagset
         self.vocab = vocab
@@ -89,10 +88,10 @@ class ConditionalRandomFieldModel(nn.Module):
         assert self.eos_t is not None  # we need this to exist
         self.eye: Tensor = torch.eye(self.k)  # identity matrix, used as a collection of one-hot tag vectors
 
-        self.rnn = nn.RNN(self.d, self.d, bidirectional=True)
-        # self.tag_embeddings = nn.Embedding(num_embeddings=self.k, embedding_dim=self.d)
-        self.ua = nn.Linear(2 * (self.d + self.k), self.d)
-        self.ub = nn.Linear(3 * self.d + self.k, self.d)
+        # self.rnn = nn.RNN(self.d, self.d, bidirectional=True)
+        # # self.tag_embeddings = nn.Embedding(num_embeddings=self.k, embedding_dim=self.d)
+        # self.ua = nn.Linear(2 * (self.d + self.k), self.d)
+        # self.ub = nn.Linear(3 * self.d + self.k, self.d)
 
         self.init_params()  # create and initialize params
 
@@ -105,7 +104,7 @@ class ConditionalRandomFieldModel(nn.Module):
     def _integerize_sentence(self, sentence: Sentence, corpus: TaggedCorpus) -> List[Tuple[int, Optional[int]]]:
         """Integerize the words and tags of the given sentence, which came from the given corpus."""
 
-        # Make sure that the sentence comes from a corpus that this HMM knows
+        # Make sure that the sentence comes from a corpus that this CRF knows
         # how to handle.
         if corpus.tagset != self.tagset or corpus.vocab != self.vocab:
             raise TypeError("The corpus that this sentence came from uses a different tagset or vocab")
@@ -121,20 +120,14 @@ class ConditionalRandomFieldModel(nn.Module):
 
         # See the reading handout section "Parametrization.""
 
-        # ThetaB = 0.01*torch.rand(self.k, self.d)
-        # self._ThetaB = Parameter(ThetaB)    # params used to construct emission matrix
-        #
-        # WA = 0.01*torch.rand(1 if self.unigram # just one row if unigram model
-        #                      else self.k,      # but one row per tag s if bigram model
-        #                      self.k)           # one column per tag t
-        # WA[:, self.bos_t] = -inf               # correct the BOS_TAG column
-        # self._WA = Parameter(WA)            # params used to construct transition matrix
+        ThetaB = 0.01 * torch.rand(self.k, self.d)
+        self._ThetaB = nn.Parameter(ThetaB)  # params used to construct emission matrix
 
-        _ThetaA = 0.01 * torch.rand(self.d)
-        self._ThetaA = Parameter(_ThetaA)  # params used to construct emission matrix
-
-        _ThetaB = 0.01 * torch.rand(self.d)
-        self._ThetaB = Parameter(_ThetaB)  # params used to construct emission matrix
+        WA = 0.01 * torch.rand(1 if self.unigram  # just one row if unigram model
+                               else self.k,  # but one row per tag s if bigram model
+                               self.k)  # one column per tag t
+        WA[:, self.bos_t] = -inf  # correct the BOS_TAG column
+        self._WA = nn.Parameter(WA)  # params used to construct transition matrix
 
     @typechecked
     def params_L2(self) -> TensorType[()]:
@@ -152,112 +145,52 @@ class ConditionalRandomFieldModel(nn.Module):
 
         # A = F.softmax(self._WA, dim=1)       # run softmax on params to get transition distributions
         # note that the BOS_TAG column will be 0, but each row will sum to 1
+        A = self._WA
 
-        # instead of softmax WA, for CRF we want to exp WA
-        A = self.f_a @ self._ThetaA  # (N, k, k, d) @ (d) -> (N, k, k)
-        self.A = A.clone()
-        self.A[:, :, self.bos_t] = 0  # log(exp(0)) = 0
+        if self.unigram:
+            # A is a row vector giving unigram probabilities p(t).
+            # We'll just set the bigram matrix to use these as p(t | s)
+            # for every row s.  This lets us simply use the bigram
+            # code for unigram experiments, although unfortunately that
+            # preserves the O(nk^2) runtime instead of letting us speed
+            # up to O(nk).
+            self.A = A.repeat(self.k, 1)
+        else:
+            # A is already a full matrix giving p(t | s).
+            self.A = A
 
-        B = self.f_b @ self._ThetaB  # (N, k, V, d) @ (d) -> (N, k, V)
+        WB = self._ThetaB @ self._E.t()  # inner products of tag weights and word embeddings
+        # B = F.softmax(WB, dim=1)         # run softmax on those inner products to get emission distributions
+        B = WB
         self.B = B.clone()
-        self.B[:, self.eos_t, :] = 0  # log(exp(0)) = 0
-        self.B[:, self.bos_t, :] = 0  # log(exp(0)) = 0
+        self.B[self.eos_t, :] = -inf  # but don't guess: EOS_TAG can't emit any column's word (only EOS_WORD)
+        self.B[self.bos_t, :] = -inf  # same for BOS_TAG (although BOS_TAG will already be ruled out by other factors)
 
     def printAB(self) -> None:
         """Print the A and B matrices in a more human-readable format (tab-separated)."""
         print("Transition matrix A:")
-        col_headers = [""] + [str(self.tagset[t]) for t in range(self.A.size(2))]
+        col_headers = [""] + [self.tagset[t] for t in range(self.A.size(1))]
         print("\t".join(col_headers))
-        for s in range(self.A.size(1)):  # rows
-            row = [str(self.tagset[s])] + [f"{torch.exp(self.A[1, s, t]):.3f}" for t in range(self.A.size(2))]
+        for s in range(self.A.size(0)):  # rows
+            row = [self.tagset[s]] + [f"{self.A[s, t]:.3f}" for t in range(self.A.size(1))]
             print("\t".join(row))
         print("\nEmission matrix B:")
-        col_headers = [""] + [str(self.vocab[w]) for w in range(self.B.size(2))]
+        col_headers = [""] + [self.vocab[w] for w in range(self.B.size(1))]
         print("\t".join(col_headers))
-        for t in range(self.A.size(1)):  # rows
-            row = [str(self.tagset[t])] + [f"{torch.exp(self.B[1, t, w]):.3f}" for w in range(self.B.size(2))]
+        for t in range(self.A.size(0)):  # rows
+            row = [self.tagset[t]] + [f"{self.B[t, w]:.3f}" for w in range(self.B.size(1))]
             print("\t".join(row))
         print("\n")
 
-    def calc_params(self, sent):
-        n = len(sent) - 2
-
-        h = torch.zeros(n + 3, 1, self.d)  # 0th index is an empty prefix followed by n word embeddings
-
-        for i in range(len(sent[1:-1])):
-            h[i + 2, 0] = self._E[sent[i + 1][0]]  # as 0th index is an empty prefix, we start from 2
-
-        h = self.rnn(h)[0].squeeze(1)
-        h = torch.sigmoid(h)  # (n + 3, 2 * d)
-
-        transition_concat_a = torch.zeros(n + 2, self.k, self.k, 2 * (self.d + self.k))
-        transition_concat_b = torch.zeros(n + 2, self.k, self.V + 2, 3 * self.d + self.k)
-
-        transition_concat_a[:, :, :, :self.d] = h[:n + 1, :self.d]
-        transition_concat_a[:, :, :, self.d: 2 * self.d] = h[2:, self.d:]
-
-        transition_concat_b[:, :, :, :self.d] = h[1:n + 2, :self.d]
-        transition_concat_b[:, :, :, self.d: 2 * self.d] = h[2:, self.d:]
-
-        for i in range(1, n + 2):
-            tag_s = sent[i - 1][1]
-            tag_t = sent[i][1]
-            word_id = sent[i][0]
-
-            if word_id >= len(self._E):  # if bos or eos
-                word_embed = torch.zeros(self.d)
-            else:
-                word_embed = self._E[word_id]  # (d)
-
-            if tag_s is not None and tag_t is not None:
-                transition_concat_a[i, tag_s, tag_t, 2 * self.d:] = torch.cat([self.eye[tag_s], self.eye[tag_t]],
-                                                                              dim=-1)  # (2k)
-                transition_concat_b[i, tag_t, word_id, 2 * self.d:] = torch.cat([self.eye[tag_t], word_embed],
-                                                                                dim=-1)  # (d + k)
-
-            elif tag_s is not None and tag_t is None:
-                s_embed = self.eye[tag_s]  # (k)
-                t_embed = self.eye[:]  # (k, k)
-
-                transition_concat_a[i, :, :, 2 * self.d:] = torch.cat([s_embed.expand(self.k, -1), t_embed],
-                                                                      dim=-1)  # (k, 2k)
-                transition_concat_b[i, :, word_id, 2 * self.d:] = torch.cat([t_embed, word_embed.expand(self.k, -1)],
-                                                                            dim=-1)  # (k, k + d)
-
-            elif tag_s is None and tag_t is not None:
-                t_embed = self.eye[tag_t]  # (k)
-                s_embed = self.eye[:]  # (k, k)
-
-                transition_concat_a[i, :, :, 2 * self.d:] = torch.cat([s_embed, t_embed.expand(self.k, -1)],
-                                                                      dim=-1)  # (k, 2k)
-                transition_concat_b[i, tag_t, word_id, 2 * self.d:] = torch.cat([t_embed, word_embed],
-                                                                                dim=-1)  # (k + d)
-
-            else:
-                s_embed = self.eye[:]  # (k, k)
-                t_embed = self.eye[:]  # (k, k)
-
-                transition_concat_a[i, :, :, 2 * self.d:] = torch.cat([s_embed, t_embed], dim=-1)  # (k, 2k)
-                transition_concat_b[i, :, word_id, 2 * self.d:] = torch.cat([t_embed, word_embed.expand(self.k, -1)],
-                                                                            dim=-1)  # (k, k + d)
-
-        self.f_a = torch.sigmoid(self.ua(transition_concat_a))  # (n + 2, k, k, 2d + 2k) -> (n + 2, k, k, d)
-        self.f_b = torch.sigmoid(self.ub(transition_concat_b))  # (n + 2, k, V, 3d + k) -> (n + 2, k, V, d)
-
     @typechecked
     def log_prob(self, sentence: Sentence, corpus: TaggedCorpus) -> TensorType[()]:
-        """Compute the log probability of a single sentence under the current
+        """Compute the conditional log probability of a single sentence under the current
         model parameters.  If the sentence is not fully tagged, the probability
         will marginalize over all possible tags.
 
         When the logging level is set to DEBUG, the alpha and beta vectors and posterior counts
         are logged.  You can check this against the ice cream spreadsheet."""
-
-        # p(t|w) = p(t, w)/Z(w)
-        # p(t, w) is supervised
-        # Z(w) is unsupervised (untagged sentence)
-        unsupervised_sent = sentence.desupervise()
-        return self.log_forward(sentence, corpus) - self.log_forward(unsupervised_sent, corpus)
+        return self.log_forward(sentence, corpus) - self.log_forward(desupervise(sentence), corpus)
 
     @typechecked
     def log_forward(self, sentence: Sentence, corpus: TaggedCorpus) -> TensorType[()]:
@@ -269,22 +202,17 @@ class ConditionalRandomFieldModel(nn.Module):
         argument, to help with integerization and check that we're
         integerizing correctly."""
 
-        # sent = self._integerize_sentence(sentence, corpus)
-
-        # The "nice" way to construct alpha is by appending to a List[Tensor] at each
-        # step.  But to better match the notation in the handout, we'll instead preallocate
-        # a list of length n+2 so that we can assign directly to alpha[j].
-
         sent = self._integerize_sentence(sentence, corpus)
 
         # you fill this in!
         # The "nice" way to construct alpha is by appending to a List[Tensor] at each
         # step.  But to better match the notation in the handout, we'll instead preallocate
         # a list of length n+2 so that we can assign directly to alpha[j].
+
         # alpha = [torch.empty(self.k) for _ in sent]  # 0
         alpha = [-float("Inf") * torch.ones(self.k) for _ in sent]  # -ve infinity
 
-        n = len(sent) - 2
+        n = len(sent)
 
         # print([self.vocab[i] for (i,j) in sent])
         # print([self.tagset[j] for (i,j) in sent])
@@ -300,30 +228,20 @@ class ConditionalRandomFieldModel(nn.Module):
         assert sent[-1][1] == self.eos_t  # ensure that the sent ends with <EOS> tag
         alpha[0][self.bos_t] = 0
 
-        self.calc_params(sent)
-        self.updateAB()
-        # self.printAB()
-
-        alpha = [torch.empty(self.k).fill_(-inf) for _ in range(n + 2)]  # (n + 2, k)
-        alpha[0][self.bos_t] = 0  # "start" node of the graph
-
-        for j in range(1, n + 2):
-            inter_alpha = alpha[j - 1][:].unsqueeze(1) + self.A[j]  # (k, 1) + (k, k) -> (k, k)
-
-            if sent[j - 1][1] is None:
-                if j == n + 1:
-                    alpha[j][:] = torch.logsumexp(inter_alpha, dim=0, safe_inf=True)  # (k, k) -> (k)
-                else:
-                    alpha[j][:] = self.B[j, :, sent[j][0]] + torch.logsumexp(inter_alpha, dim=0,
-                                                                             safe_inf=True)  # (k) + (k) -> (k)
-
+        for j in range(1, n-1):
+            (curr_word, curr_tag) = sent[j]
+            if curr_tag is None:
+                # self.A and self.B are in log space
+                alpha_transition = alpha[j - 1].reshape(-1, 1) + self.A
+                alpha[j] = logsumexp_new(alpha_transition + self.B[:, curr_word].reshape(1, -1), dim=0, keepdim=False, safe_inf=True)
             else:
-                if j == n + 1:
-                    alpha[j][:] = inter_alpha[sent[j - 1][1], :]  # (k)
-                else:
-                    alpha[j][:] = self.B[j, :, sent[j][0]] + inter_alpha[sent[j - 1][1]]  # (k) + (k) -> (k)
+                alpha_transition = alpha[j - 1] + self.A[:, curr_tag]
+                alpha[j][curr_tag] = logsumexp_new(alpha_transition + self.B[curr_tag, curr_word], dim=0, keepdim=False, safe_inf=True)
 
-        Z = alpha[n + 1][self.eos_t]
+        # handling EOS tag
+        alpha[-1][self.eos_t] = logsumexp_new(alpha[-2] + self.A[:, self.eos_t], dim=0, keepdim=False, safe_inf=True)
+
+        Z = alpha[n-1][self.eos_t]
         return Z
 
     def viterbi_tagging(self, sentence: Sentence, corpus: TaggedCorpus) -> Sentence:
@@ -337,48 +255,46 @@ class ConditionalRandomFieldModel(nn.Module):
         sent = self._integerize_sentence(sentence, corpus)
 
         # you fill this in!
-        n = len(sent) - 2
+        n = len(sent)
 
-        self.calc_params(sent)
-        self.updateAB()
+        mu = [-float("Inf") * torch.ones(self.k) for _ in sent]  # -ve inf
+        backpointers = [torch.empty(self.k) for _ in sent]
+        mu[0][self.bos_t] = 0.  # handling the first
 
-        alpha = [torch.empty(self.k).fill_(-inf) for _ in range(n + 2)]  # (n + 2, k)
-        alpha[0][self.bos_t] = 0  # "start" node of the graph
+        for j in range(1, n-1):
+            curr_word, curr_tag = sent[j]
+            alpha_transition = mu[j-1].reshape(-1, 1) + self.A
+            max_mat = torch.max(alpha_transition + self.B[:, curr_word].reshape(1, -1), 0)
+            mu[j] = max_mat[0]  # alpha values
+            backpointers[j] = max_mat[1]
 
-        bp = [torch.zeros(self.k, dtype=torch.int32) for _ in range(n + 2)]  # (n + 2, k)
+        # handling EOS tag
+        max_prob = torch.max(mu[-2].reshape(-1, 1) + self.A, 0)
+        mu[n-1] = max_prob.values
+        backpointers[n-1] = max_prob.indices
 
-        for j in range(1, n + 2):
-            inter_alpha = alpha[j - 1][:].unsqueeze(1) + self.A[j]  # (k, 1) + (k, k) -> (k, k)
-
-            if j == n + 1:
-                max_alpha, max_index = torch.max(inter_alpha, dim=0)  # (k), (k)
-            else:
-                max_alpha, max_index = torch.max(self.B[j, :, sent[j][0]] + inter_alpha,
-                                                 dim=0)  # max ((k) + (k, k) -> (k, k)) -> (k)
-
-            alpha[j][:] = max_alpha
-            bp[j][:] = max_index
-
-        # follow backpointers to find the best tag sequence that ends at the final state (EOS at time n+1)
-        temp = self.eos_t
-        res = [(EOS_WORD, temp)]
-        for i in range(n + 1, 1, -1):
-            temp = bp[i][temp]
-            res.append((sentence[i - 1][0], self.tagset[temp]))
-        res.append((BOS_WORD, temp))
-        res.reverse()
-        return Sentence(res)
+        # follow backpointers to find the best sequence
+        previous_tag = self.eos_t
+        words = []
+        for i in range(n-1, -1, -1):
+            curr_word, curr_tag = sent[i]
+            word = self.vocab[curr_word]
+            tag = self.tagset[previous_tag]
+            previous_tag = backpointers[i][previous_tag]
+            words.append((word, tag))
+            # print(f"Current: {tag}, Prev: {previous_tag}")
+        words.reverse()
+        sent = Sentence(words)
+        return sent
 
     def train(self,
               corpus: TaggedCorpus,
-              loss: Callable[[ConditionalRandomFieldModel], float],
-              tolerance: float = 0.001,
-              minibatch_size: int = 1,
-              evalbatch_size: int = 500,
-              lr: float = 1.0,
-              reg: float = 0.0,
+              loss: Callable[[CRFModel], float],
+              tolerance=0.001,
+              minibatch_size: int = 1, evalbatch_size: int = 500,
+              lr: float = 1.0, reg: float = 0.0,
               save_path: Path = Path("my_crf.pkl")) -> None:
-        """Train the HMM on the given training corpus, starting at the current parameters.
+        """Train the CRF on the given training corpus, starting at the current parameters.
         The minibatch size controls how often we do an update.
         (Recommended to be larger than 1 for speed; can be inf for the whole training corpus.)
         The evalbatch size controls how often we evaluate (e.g., on a development corpus).
@@ -405,8 +321,8 @@ class ConditionalRandomFieldModel(nn.Module):
 
         old_dev_loss: Optional[float] = None  # we'll keep track of the dev loss here
 
-        optimizer = optim.SGD(self.parameters(), lr=lr)  # optimizer knows what the params are
-        # self.updateAB()  # compute A and B matrices from current params
+        optimizer = torch.optim.SGD(self.parameters(), lr=lr)  # optimizer knows what the params are
+        self.updateAB()  # compute A and B matrices from current params
         log_likelihood = tensor(0.0, device=self.device)  # accumulator for minibatch log_likelihood
         for m, sentence in tqdm(enumerate(corpus.draw_sentences_forever())):
             # Before we process the new sentence, we'll take stock of the preceding
@@ -425,7 +341,8 @@ class ConditionalRandomFieldModel(nn.Module):
                 length = sqrt(sum((x.grad * x.grad).sum().item() for x in self.parameters()))
                 logger.debug(f"Size of gradient vector: {length}")  # should approach 0 for large minibatch at local min
                 optimizer.step()  # SGD step
-                # self.updateAB()  # update A and B matrices from new params
+                self.updateAB()  # update A and B matrices from new params
+                # self.printAB()
                 log_likelihood = tensor(0.0, device=self.device)  # reset accumulator for next minibatch
 
             # If we're at the end of an eval batch, or at the start of training, evaluate.
@@ -448,7 +365,7 @@ class ConditionalRandomFieldModel(nn.Module):
         logger.info(f"Saved model to {destination}")
 
     @classmethod
-    def load(cls, source: Path) -> ConditionalRandomFieldModel:
+    def load(cls, source: Path) -> CRFModel:
         import pickle  # for loading/saving Python objects
         logger.info(f"Loading model from {source}")
         with open(source, mode="rb") as f:
