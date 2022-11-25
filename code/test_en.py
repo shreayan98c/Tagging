@@ -27,7 +27,7 @@ log.info(f"Tagset: f{list(entrain.tagset)}")
 known_vocab = TaggedCorpus(Path("ensup")).vocab  # words seen with supervised tags; used in evaluation
 
 # Initialize an HMM
-lexicon = build_lexicon(entrain, embeddings_file=Path('words-50.txt'))  # works better with more attributes!
+lexicon = build_lexicon(entrain, embeddings_file=Path('../lexicons/words-50.txt'))  # works better with more attributes!
 hmm = HiddenMarkovModel(entrain.tagset, entrain.vocab, lexicon)
 
 # Let's initialize with supervised training to approximately maximize the
