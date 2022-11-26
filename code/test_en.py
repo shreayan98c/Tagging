@@ -35,8 +35,11 @@ hmm = HiddenMarkovModel(entrain.tagset, entrain.vocab, lexicon)
 # the tolerance of training (using the `tolerance` argument), since we don't 
 # really have to train to convergence.
 loss_sup = lambda model: model_cross_entropy(model, eval_corpus=ensup)
-hmm.train(corpus=ensup, loss=loss_sup, minibatch_size=30, evalbatch_size=10000, lr=0.00015, reg=1,
+hmm.train(corpus=ensup, loss=loss_sup, minibatch_size=30, evalbatch_size=10000, lr=0.00015, reg=0.5,
           save_path=Path("en_hmm.pkl"))
+
+hmm.train(corpus=ensup, loss=loss_sup, minibatch_size=30, evalbatch_size=10000, lr=0.00015, reg=1,
+          save_path=Path('en_hmm_awesome.pkl'))
 
 # Now let's throw in the unsupervised training data as well, and continue
 # training to try to improve accuracy on held-out development data.
