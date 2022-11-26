@@ -37,9 +37,9 @@ logging.info("Running on CRF Model")
 # the tolerance of training (using the `tolerance` argument), since we don't
 # really have to train to convergence.
 loss_sup = lambda model: model_cross_entropy(model, eval_corpus=ensup)
-crf.train(corpus=ensup, loss=loss_sup, minibatch_size=32, evalbatch_size=10000, lr=0.0001, reg=2,
-          save_path='en_crf_birnn.pkl')
-logging.info("sup error rate is: ", model_error_rate(crf, eval_corpus=ensup, known_vocab=known_vocab))
+crf.train(corpus=ensup, loss=loss_sup, minibatch_size=32, evalbatch_size=10000, lr=0.00015, reg=2,
+          save_path=Path('en_crf_birnn.pkl'))
+logging.info(f"sup error rate is: {model_error_rate(crf, eval_corpus=ensup, known_vocab=known_vocab)}")
 
 # More detailed look at the first 10 sentences in the held-out corpus,
 # including Viterbi tagging.
