@@ -35,16 +35,16 @@ hmm = HiddenMarkovModel(entrain.tagset, entrain.vocab, lexicon)
 # the tolerance of training (using the `tolerance` argument), since we don't 
 # really have to train to convergence.
 loss_sup = lambda model: model_cross_entropy(model, eval_corpus=ensup)
-hmm.train(corpus=ensup, loss=loss_sup, minibatch_size=30, evalbatch_size=10000, lr=0.0001, reg=1,
-          save_path='en_hmm.pkl')
+hmm.train(corpus=ensup, loss=loss_sup, minibatch_size=30, evalbatch_size=10000, lr=0.00015, reg=1,
+          save_path=Path("en_hmm.pkl"))
 
 # Now let's throw in the unsupervised training data as well, and continue
 # training to try to improve accuracy on held-out development data.
 # We'll stop when accuracy is getting worse, so we can get away without regularization,
 # but it would be better to search for the best `reg` and other hyperparameters in this call.
 loss_dev = lambda model: model_error_rate(model, eval_corpus=endev, known_vocab=known_vocab)
-hmm.train(corpus=entrain, loss=loss_dev, minibatch_size=30, evalbatch_size=10000, lr=0.0001, reg=0,
-          save_path='en_hmm_raw.pkl')
+hmm.train(corpus=entrain, loss=loss_dev, minibatch_size=30, evalbatch_size=10000, lr=0.00015, reg=0,
+          save_path=Path("en_hmm_raw.pkl"))
 
 # More detailed look at the first 10 sentences in the held-out corpus,
 # including Viterbi tagging.

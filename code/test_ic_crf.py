@@ -27,7 +27,7 @@ logging.info(f"Ice cream tagset: {list(icsup.tagset)}")
 # Initialize a CRF
 # normal
 lexicon = build_lexicon(icsup, one_hot=True)  # works better with more attributes!
-crf = CRFModel(icsup.tagset, icsup.vocab, lexicon) # not changing the name for convenience
+crf = CRFModel(icsup.tagset, icsup.vocab, lexicon)  # not changing the name for convenience
 logging.info("Running on CRF Model")
 
 # Let's initialize with supervised training to approximately maximize the
@@ -35,5 +35,6 @@ logging.info("Running on CRF Model")
 # the tolerance of training (using the `tolerance` argument), since we don't
 # really have to train to convergence.
 loss_sup = lambda model: model_cross_entropy(model, eval_corpus=icsup)
-crf.train(corpus=icsup, loss=loss_sup, minibatch_size=10, evalbatch_size=500, lr=0.0001, reg=1, save_path='ic_crf.pkl')
+crf.train(corpus=icsup, loss=loss_sup, minibatch_size=10, evalbatch_size=500, lr=0.0001, reg=1,
+          save_path=Path('ic_crf.pkl'))
 logging.info(f"dev error rate is: {model_error_rate(crf, eval_corpus=icsup)}")

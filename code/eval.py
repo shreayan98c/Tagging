@@ -12,19 +12,20 @@ from tqdm import tqdm  # type: ignore
 
 from corpus import Sentence, Word, EOS_WORD, BOS_WORD, OOV_WORD, TaggedCorpus, desupervise, sentence_str
 from hmm import HiddenMarkovModel
+from crf import CRFModel
 from integerize import Integerizer
 
 log = logging.getLogger(Path(__file__).stem)  # For usage, see findsim.py in earlier assignment.
 
 
-def viterbi_tagger(model: HiddenMarkovModel, eval_corpus: TaggedCorpus) -> Callable[[Sentence], Sentence]:
+def viterbi_tagger(model: Union[HiddenMarkovModel, CRFModel], eval_corpus: TaggedCorpus) -> Callable[[Sentence], Sentence]:
     def tagger(input: Sentence) -> Sentence:
         return model.viterbi_tagging(input, eval_corpus)
 
     return tagger
 
 
-def model_cross_entropy(model: HiddenMarkovModel,
+def model_cross_entropy(model: Union[HiddenMarkovModel, CRFModel],
                         eval_corpus: TaggedCorpus) -> float:
     """Return cross-entropy per token of the model on the given evaluation corpus.
     That corpus may be either supervised or unsupervised.
@@ -40,7 +41,7 @@ def model_cross_entropy(model: HiddenMarkovModel,
     return cross_entropy
 
 
-def model_error_rate(model: HiddenMarkovModel,
+def model_error_rate(model: Union[HiddenMarkovModel, CRFModel],
                      eval_corpus: TaggedCorpus,
                      known_vocab: Optional[Integerizer[Word]] = None) -> float:
     """Return the error rate of the given model on the given evaluation corpus,
@@ -109,7 +110,7 @@ def eval_tagging(predicted: Sentence,
     return counts
 
 
-def tagger_write_output(model_or_tagger: Union[HiddenMarkovModel, Callable[[Sentence], Sentence]],
+def tagger_write_output(model_or_tagger: Union[Union[HiddenMarkovModel, CRFModel], Callable[[Sentence], Sentence]],
                         eval_corpus: TaggedCorpus,
                         output_path: Path) -> None:
     if isinstance(model_or_tagger, HiddenMarkovModel):

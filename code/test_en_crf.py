@@ -37,8 +37,8 @@ logging.info("Running on CRF Model")
 # the tolerance of training (using the `tolerance` argument), since we don't
 # really have to train to convergence.
 loss_sup = lambda model: model_cross_entropy(model, eval_corpus=ensup)
-crf.train(corpus=ensup, loss=loss_sup, minibatch_size=30, evalbatch_size=10000, lr=0.0001, reg=2,
-          save_path='en_crf.pkl')
+crf.train(corpus=ensup, loss=loss_sup, minibatch_size=30, evalbatch_size=10000, lr=0.00015, reg=2,
+          save_path=Path("en_crf.pkl"))
 logging.info("sup error rate is: ", model_error_rate(crf, eval_corpus=ensup, known_vocab=known_vocab))
 
 # Now let's throw in the unsupervised training data as well, and continue
@@ -46,8 +46,8 @@ logging.info("sup error rate is: ", model_error_rate(crf, eval_corpus=ensup, kno
 # We'll stop when accuracy is getting worse, so we can get away without regularization,
 # but it would be better to search for the best `reg` and other hyperparameters in this call.
 loss_dev = lambda model: model_error_rate(model, eval_corpus=endev, known_vocab=known_vocab)
-crf.train(corpus=entrain, loss=loss_dev, minibatch_size=30, evalbatch_size=10000, lr=0.0001, reg=2,
-          save_path='en_crf_raw.pkl')
+crf.train(corpus=entrain, loss=loss_dev, minibatch_size=30, evalbatch_size=10000, lr=0.00015, reg=2,
+          save_path=Path("en_crf_raw.pkl"))
 logging.info("dev error rate is: ", model_error_rate(crf, eval_corpus=endev, known_vocab=known_vocab))
 
 # More detailed look at the first 10 sentences in the held-out corpus,
