@@ -54,6 +54,7 @@ class CRFModel(nn.Module):
                  lexicon: Tensor,
                  unigram=False,
                  awesome=False,
+                 affixes=False,
                  birnn=False):
         """Construct an CRF with initially random parameters, with the
         given tagset, vocabulary, and lexical features."""
@@ -70,12 +71,13 @@ class CRFModel(nn.Module):
 
         assert vocab[-2:] == [EOS_WORD, BOS_WORD]  # make sure these are the last two
 
-        self.k = len(tagset)  # number of tag types
-        self.V = len(vocab) - 2  # number of word types (not counting EOS_WORD and BOS_WORD)
+        self.k = len(tagset)      # number of tag types
+        self.V = len(vocab) - 2   # number of word types (not counting EOS_WORD and BOS_WORD)
         self.d = lexicon.size(1)  # dimensionality of a word's embedding in attribute space
-        self.unigram = unigram  # do we fall back to a unigram model?
-        self.awesome = awesome  # further improvements
-        self.birnn = birnn
+        self.unigram = unigram    # do we fall back to a unigram model?
+        self.awesome = awesome    # open ended improvements
+        self.affixes = affixes    # open ended improvements
+        self.birnn = birnn        # bidirectional rnn
 
         self.tagset = tagset
         self.vocab = vocab
@@ -87,11 +89,6 @@ class CRFModel(nn.Module):
         assert self.bos_t is not None  # we need this to exist
         assert self.eos_t is not None  # we need this to exist
         self.eye: Tensor = torch.eye(self.k)  # identity matrix, used as a collection of one-hot tag vectors
-
-        # self.rnn = nn.RNN(self.d, self.d, bidirectional=True)
-        # # self.tag_embeddings = nn.Embedding(num_embeddings=self.k, embedding_dim=self.d)
-        # self.ua = nn.Linear(2 * (self.d + self.k), self.d)
-        # self.ub = nn.Linear(3 * self.d + self.k, self.d)
 
         self.init_params()  # create and initialize params
 
@@ -232,11 +229,13 @@ class CRFModel(nn.Module):
             (curr_word, curr_tag) = sent[j]
             if curr_tag is None:
                 # self.A and self.B are in log space
-                alpha_transition = alpha[j - 1].reshape(-1, 1) + self.A
-                alpha[j] = logsumexp_new(alpha_transition + self.B[:, curr_word].reshape(1, -1), dim=0, keepdim=False, safe_inf=True)
+                alpha_transition = alpha[j-1].reshape(-1, 1) + self.A
+                alpha[j] = logsumexp_new(alpha_transition + self.B[:, curr_word].reshape(1, -1), dim=0,
+                                         keepdim=False, safe_inf=True)
             else:
-                alpha_transition = alpha[j - 1] + self.A[:, curr_tag]
-                alpha[j][curr_tag] = logsumexp_new(alpha_transition + self.B[curr_tag, curr_word], dim=0, keepdim=False, safe_inf=True)
+                alpha_transition = alpha[j-1] + self.A[:, curr_tag]
+                alpha[j][curr_tag] = logsumexp_new(alpha_transition + self.B[curr_tag, curr_word], dim=0,
+                                                   keepdim=False, safe_inf=True)
 
         # handling EOS tag
         alpha[-1][self.eos_t] = logsumexp_new(alpha[-2] + self.A[:, self.eos_t], dim=0, keepdim=False, safe_inf=True)

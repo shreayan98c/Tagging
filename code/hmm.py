@@ -52,7 +52,8 @@ class HiddenMarkovModel(nn.Module):
                  vocab: Integerizer[Word],
                  lexicon: Tensor,
                  unigram: bool = False,
-                 awesome: bool = False):
+                 awesome: bool = False,
+                 affixes: bool = False):
         """Construct an HMM with initially random parameters, with the
         given tagset, vocabulary, and lexical features.
         
@@ -78,6 +79,7 @@ class HiddenMarkovModel(nn.Module):
         self.d = lexicon.size(1)   # dimensionality of a word's embedding in attribute space
         self.unigram = unigram     # do we fall back to a unigram model?
         self.awesome = awesome     # open ended improvements
+        self.affixes = affixes     # open ended improvements
 
         self.tagset = tagset
         self.vocab = vocab

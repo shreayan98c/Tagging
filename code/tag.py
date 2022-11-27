@@ -149,13 +149,12 @@ def main() -> None:
         if args.crf:
             lexicon = build_lexicon(train, embeddings_file=Path(args.lexicon), log_counts=args.awesome,
                                     affixes=args.awesome)
-            model = CRFModel(tagset, vocab, lexicon, unigram=args.unigram, awesome=args.awesome, affixes=args.awesome)
+            model = CRFModel(tagset, vocab, lexicon, unigram=args.unigram, awesome=args.awesome,
+                             affixes=args.awesome, birnn=args.birnn)
         else:
             lexicon = build_lexicon(train, embeddings_file=Path(args.lexicon), log_counts=args.awesome)
-            model = HiddenMarkovModel(tagset, vocab, lexicon, unigram=args.unigram,
-                                    #awesome=args.awesome,
-                                    #affixes=args.awesome
-                                    )
+            model = HiddenMarkovModel(tagset, vocab, lexicon, unigram=args.unigram, awesome=args.awesome,
+                                      affixes=args.awesome)
 
     dev = TaggedCorpus(Path(args.eval), tagset=tagset, vocab=vocab)
     known_vocab = model.vocab
