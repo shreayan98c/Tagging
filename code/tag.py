@@ -152,10 +152,13 @@ def main() -> None:
             model = CRFModel(tagset, vocab, lexicon, unigram=args.unigram, awesome=args.awesome, affixes=args.awesome)
         else:
             lexicon = build_lexicon(train, embeddings_file=Path(args.lexicon), log_counts=args.awesome)
-            model = HiddenMarkovModel(tagset, vocab, lexicon, unigram=args.unigram, awesome=args.awesome,
-                                      affixes=args.awesome)
+            model = HiddenMarkovModel(tagset, vocab, lexicon, unigram=args.unigram,
+                                    #awesome=args.awesome,
+                                    #affixes=args.awesome
+                                    )
 
     dev = TaggedCorpus(Path(args.eval), tagset=tagset, vocab=vocab)
+    known_vocab = model.vocab
     if args.train is not None:
         assert train is not None and model is not None
         # you can instantiate a different development loss depending on the question / which one optimizes performance
@@ -168,7 +171,10 @@ def main() -> None:
                     reg=args.reg,
                     save_path=args.save_path,
                     tolerance=args.tolerance)
-    tagger_write_output(model, dev, Path(args.eval + ".output") if args.output_file is None else args.output_file)
+    #tagger_write_output(model, dev, Path(args.eval + ".output") if args.output_file is None else args.output_file)
+
+    if args.train is None:
+        print(f"test error rate is: {model_error_rate(model, eval_corpus=dev, known_vocab=known_vocab)}")
 
 
 if __name__ == "__main__":

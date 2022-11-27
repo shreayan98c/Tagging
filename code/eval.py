@@ -74,6 +74,7 @@ def tagger_error_rate(tagger: Callable[[Sentence], Sentence],
     if known_vocab is None:
         categories.remove('KNOWN')
     results = [f"{c.lower()}: {(fraction(c)):.3%}" for c in categories]
+    print(results)
     log.info(f"Tagging accuracy: {', '.join(results)}")
 
     return 1 - fraction('ALL')  # loss value (the error rate)
