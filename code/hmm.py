@@ -47,11 +47,12 @@ class HiddenMarkovModel(nn.Module):
     as "words."
     """
 
-    def __init__(self, 
+    def __init__(self,
                  tagset: Integerizer[Tag],
                  vocab: Integerizer[Word],
                  lexicon: Tensor,
-                 unigram: bool = False):
+                 unigram: bool = False,
+                 awesome: bool = False):
         """Construct an HMM with initially random parameters, with the
         given tagset, vocabulary, and lexical features.
         
@@ -76,6 +77,7 @@ class HiddenMarkovModel(nn.Module):
         self.V = len(vocab) - 2    # number of word types (not counting EOS_WORD and BOS_WORD)
         self.d = lexicon.size(1)   # dimensionality of a word's embedding in attribute space
         self.unigram = unigram     # do we fall back to a unigram model?
+        self.awesome = awesome     # open ended improvements
 
         self.tagset = tagset
         self.vocab = vocab
@@ -124,7 +126,7 @@ class HiddenMarkovModel(nn.Module):
                              else self.k,      # but one row per tag s if bigram model
                              self.k)           # one column per tag t
         WA[:, self.bos_t] = -inf               # correct the BOS_TAG column
-        self._WA = Parameter(WA)            # params used to construct transition matrix
+        self._WA = Parameter(WA)               # params used to construct transition matrix
 
 
     @typechecked
@@ -141,7 +143,7 @@ class HiddenMarkovModel(nn.Module):
     def updateAB(self) -> None:
         """Set the transition and emission matrices A and B, based on the current parameters.
         See the "Parametrization" section of the reading handout."""
-        
+
         A = F.softmax(self._WA, dim=1)       # run softmax on params to get transition distributions
                                              # note that the BOS_TAG column will be 0, but each row will sum to 1
         if self.unigram:
@@ -172,7 +174,7 @@ class HiddenMarkovModel(nn.Module):
         for s in range(self.A.size(0)):   # rows
             row = [str(self.tagset[s])] + [f"{self.A[s,t]:.3f}" for t in range(self.A.size(1))]
             print("\t".join(row))
-        print("\nEmission matrix B:")        
+        print("\nEmission matrix B:")
         col_headers = [""] + [str(self.vocab[w]) for w in range(self.B.size(1))]
         print("\t".join(col_headers))
         for t in range(self.A.size(0)):   # rows
