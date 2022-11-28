@@ -91,7 +91,7 @@ class HiddenMarkovModel(nn.Module):
         self.eos_t: Optional[int] = tagset.index(EOS_TAG)
         assert self.bos_t is not None    # we need this to exist
         assert self.eos_t is not None    # we need this to exist
-        self.eye: Tensor = torch.eye(self.k, device=self.device)  # identity matrix, used as a collection of one-hot tag vectors
+        self.eye: Tensor = torch.eye(self.k)  # identity matrix, used as a collection of one-hot tag vectors
 
         self.init_params()     # create and initialize params
 
