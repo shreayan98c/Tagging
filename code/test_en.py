@@ -13,6 +13,8 @@ from hmm import HiddenMarkovModel
 from lexicon import build_lexicon
 import torch
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 # Set up logging
 log = logging.getLogger("test_en")  # For usage, see findsim.py in earlier assignment.
 logging.basicConfig(format="%(levelname)s : %(message)s", level=logging.INFO)  # could change INFO to DEBUG

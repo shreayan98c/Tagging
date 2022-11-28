@@ -6,11 +6,13 @@ import math
 from pathlib import Path
 from typing import Callable
 
-from corpus import TaggedCorpus, desupervise, sentence_str
+from corpus import TaggedCorpus, sentence_str
 from eval import eval_tagging, model_cross_entropy, model_error_rate
 from crf import CRFModel
 from lexicon import build_lexicon
 import torch
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Set up logging
 logging.basicConfig(format="%(levelname)s : %(message)s", level=logging.INFO)  # could change INFO to DEBUG
@@ -54,7 +56,7 @@ logging.info(f"dev error rate is: {model_error_rate(crf, eval_corpus=endev, know
 # including Viterbi tagging.
 for m, sentence in enumerate(endev):
     if m >= 10: break
-    viterbi = crf.viterbi_tagging(desupervise(sentence), endev)
+    viterbi = crf.viterbi_tagging(sentence.desupervise(), endev)
     counts = eval_tagging(predicted=viterbi, gold=sentence,
                           known_vocab=known_vocab)
     num = counts['NUM', 'ALL']

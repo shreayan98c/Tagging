@@ -12,6 +12,8 @@ from crf import CRFModel
 from lexicon import build_lexicon
 import torch
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 # Set up logging
 logging.basicConfig(format="%(levelname)s : %(message)s", level=logging.INFO)  # could change INFO to DEBUG
 # torch.autograd.set_detect_anomaly(True)    # uncomment to improve error messages from .backward(), but slows down

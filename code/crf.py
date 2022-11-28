@@ -22,8 +22,7 @@ from typeguard import typechecked
 from tqdm import tqdm  # type: ignore
 
 from logsumexp_safe import *
-from corpus import (BOS_TAG, BOS_WORD, EOS_TAG, EOS_WORD, Sentence, Tag,
-                    TaggedCorpus, Word, desupervise)
+from corpus import (BOS_TAG, BOS_WORD, EOS_TAG, EOS_WORD, Sentence, Tag, TaggedCorpus, Word)
 from integerize import Integerizer
 
 logger = logging.getLogger(Path(__file__).stem)  # For usage, see findsim.py in earlier assignment.
@@ -90,6 +89,11 @@ class CRFModel(nn.Module):
         assert self.eos_t is not None  # we need this to exist
         self.eye: Tensor = torch.eye(self.k)  # identity matrix, used as a collection of one-hot tag vectors
 
+        if self.birnn:
+            self.rnn = nn.RNN(self.d, self.d, bidirectional=True)
+            self.ua = nn.Linear(self.k * 2 * (self.d + self.k), self.k)
+            self.ub = nn.Linear(self.k * (3 * self.d + self.k), self.k)
+
         self.init_params()  # create and initialize params
 
     @property
@@ -125,6 +129,13 @@ class CRFModel(nn.Module):
                                self.k)  # one column per tag t
         WA[:, self.bos_t] = -inf  # correct the BOS_TAG column
         self._WA = nn.Parameter(WA)  # params used to construct transition matrix
+
+        if self.birnn:
+            _ThetaA = 0.01 * torch.rand(self.d)
+            self._ThetaA = Parameter(_ThetaA)  # params used to construct transition matrix
+
+            _ThetaB = 0.01 * torch.rand(self.d)
+            self._ThetaB = Parameter(_ThetaB)  # params used to construct emission matrix
 
     @typechecked
     def params_L2(self) -> TensorType[()]:
@@ -163,6 +174,50 @@ class CRFModel(nn.Module):
         self.B[self.eos_t, :] = -inf  # but don't guess: EOS_TAG can't emit any column's word (only EOS_WORD)
         self.B[self.bos_t, :] = -inf  # same for BOS_TAG (although BOS_TAG will already be ruled out by other factors)
 
+    def calc_params(self, sent):
+        n = len(sent) - 2
+
+        # 0th index is an empty prefix followed by n word embeddings
+        h = torch.zeros(n+3, 1, self.d)
+
+        for i in range(len(sent[1:-1])):
+            # start from 2 since 0th index is an empty prefix, we
+            h[i+2, 0] = self._E[sent[i + 1][0]]
+
+        h = self.rnn(h)[0].squeeze(1)
+        h = torch.sigmoid(h)
+
+        transition_concat_a = torch.zeros(n + 2, self.k, self.k, 2 * (self.d + self.k))
+        transition_concat_b = torch.zeros(n + 2, self.k, self.k, 3 * self.d + self.k)
+
+        transition_concat_a[1:, :, :, :self.d] = h[:n + 1, None, None, :self.d]
+        transition_concat_a[1:, :, :, self.d: 2 * self.d] = h[2:, None, None, self.d:]
+
+        transition_concat_b[1:, :, :, :self.d] = h[1:n + 2, None, None, :self.d]
+        transition_concat_b[1:, :, :, self.d: 2 * self.d] = h[2:, None, None, self.d:]
+
+        for i in range(1, n + 2):
+            prev_word, prev_tag = sent[i-1]
+            curr_word, curr_tag = sent[i]
+
+            if curr_word >= len(self._E):
+                # if bos or eos
+                word_embed = torch.zeros(self.d)
+            else:
+                # other words
+                word_embed = self._E[curr_word]
+
+            s_embed = self.eye[:]
+            t_embed = self.eye[:]
+            transition_concat_a[i, :, :, 2*self.d:] = torch.cat([s_embed, t_embed], dim=-1)
+            transition_concat_b[i, :, :, 2*self.d:] = torch.cat([t_embed, word_embed.expand(self.k, -1)], dim=-1)
+
+        transition_concat_a = transition_concat_a.reshape(n+2, self.k, -1)
+        transition_concat_b = transition_concat_b.reshape(n+2, self.k, -1)
+
+        self.f_a = torch.sigmoid(self.ua(transition_concat_a))
+        self.f_b = torch.sigmoid(self.ub(transition_concat_b))
+
     def printAB(self) -> None:
         """Print the A and B matrices in a more human-readable format (tab-separated)."""
         print("Transition matrix A:")
@@ -187,7 +242,7 @@ class CRFModel(nn.Module):
 
         When the logging level is set to DEBUG, the alpha and beta vectors and posterior counts
         are logged.  You can check this against the ice cream spreadsheet."""
-        return self.log_forward(sentence, corpus) - self.log_forward(desupervise(sentence), corpus)
+        return self.log_forward(sentence, corpus) - self.log_forward(sentence.desupervise(), corpus)
 
     @typechecked
     def log_forward(self, sentence: Sentence, corpus: TaggedCorpus) -> TensorType[()]:
@@ -290,7 +345,8 @@ class CRFModel(nn.Module):
               corpus: TaggedCorpus,
               loss: Callable[[CRFModel], float],
               tolerance=0.001,
-              minibatch_size: int = 1, evalbatch_size: int = 500,
+              minibatch_size: int = 1,
+              evalbatch_size: int = 500,
               lr: float = 1.0, reg: float = 0.0,
               save_path: Path = Path("my_crf.pkl")) -> None:
         """Train the CRF on the given training corpus, starting at the current parameters.

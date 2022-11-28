@@ -4,7 +4,7 @@ Command-line interface for training and evaluating HMM and CRF taggers.
 import argparse
 import logging
 from pathlib import Path
-from eval import model_cross_entropy, model_error_rate, tagger_write_output
+from eval import model_cross_entropy, model_error_rate, tagger_write_output, tagger_error_rate, viterbi_tagger
 from hmm import HiddenMarkovModel
 from crf import CRFModel
 from lexicon import build_lexicon
@@ -170,9 +170,10 @@ def main() -> None:
                     reg=args.reg,
                     save_path=args.save_path,
                     tolerance=args.tolerance)
-    #tagger_write_output(model, dev, Path(args.eval + ".output") if args.output_file is None else args.output_file)
+    tagger_write_output(model, dev, Path(args.eval + ".output") if args.output_file is None else args.output_file)
 
     if args.train is None:
+        print(f"tagger error rate is: {tagger_error_rate(viterbi_tagger(model, dev), eval_corpus=dev, known_vocab=vocab)}")
         print(f"test error rate is: {model_error_rate(model, eval_corpus=dev, known_vocab=known_vocab)}")
 
 

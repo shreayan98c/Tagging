@@ -12,6 +12,8 @@ from crf import CRFModel
 from lexicon import build_lexicon
 import torch
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 # Set up logging
 log = logging.getLogger("test_ic")  # For usage, see findsim.py in earlier assignment.
 logging.basicConfig(level=logging.INFO)  # could change INFO to DEBUG

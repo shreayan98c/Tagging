@@ -10,7 +10,7 @@ from typing import Counter, Tuple, Optional, Callable, Union
 import torch
 from tqdm import tqdm  # type: ignore
 
-from corpus import Sentence, Word, EOS_WORD, BOS_WORD, OOV_WORD, TaggedCorpus, desupervise, sentence_str
+from corpus import Sentence, Word, EOS_WORD, BOS_WORD, OOV_WORD, TaggedCorpus, sentence_str
 from hmm import HiddenMarkovModel
 from crf import CRFModel
 from integerize import Integerizer
@@ -62,7 +62,7 @@ def tagger_error_rate(tagger: Callable[[Sentence], Sentence],
     with torch.no_grad():  # type: ignore
         counts: Counter[Tuple[str, str]] = Counter()  # keep running totals here
         for gold in tqdm(eval_corpus.get_sentences()):
-            predicted = tagger(desupervise(gold))
+            predicted = tagger(gold.desupervise())
             counts += eval_tagging(predicted, gold, known_vocab)  # += works on dictionaries
 
     def fraction(c: str) -> float:
@@ -122,5 +122,5 @@ def tagger_write_output(model_or_tagger: Union[Union[HiddenMarkovModel, CRFModel
         tagger = viterbi_tagger(model_or_tagger, eval_corpus)
     with open(output_path, 'w') as f:
         for gold in tqdm(eval_corpus.get_sentences()):
-            predicted = tagger(desupervise(gold))
+            predicted = tagger(gold.desupervise())
             f.write(sentence_str(predicted) + "\n")

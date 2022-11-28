@@ -22,13 +22,12 @@ from typeguard import typechecked
 from tqdm import tqdm # type: ignore
 
 from logsumexp_safe import *
-from corpus import (BOS_TAG, BOS_WORD, EOS_TAG, EOS_WORD, Sentence, Tag,
-                    TaggedCorpus, Word)
+from corpus import (BOS_TAG, BOS_WORD, EOS_TAG, EOS_WORD, Sentence, Tag, TaggedCorpus, Word)
 from integerize import Integerizer
 
 logger = logging.getLogger(Path(__file__).stem)  # For usage, see findsim.py in earlier assignment.
-    # Note: We use the name "logger" this time rather than "log" since we
-    # are already using "log" for the mathematical log!
+# Note: We use the name "logger" this time rather than "log" since we
+# are already using "log" for the mathematical log!
 
 # Set the seed for random numbers in torch, for replicability
 torch.manual_seed(1337)
@@ -39,6 +38,8 @@ patch_typeguard()   # makes @typechecked work with torchtyping
 ###
 # HMM tagger
 ###
+
+
 class HiddenMarkovModel(nn.Module):
     """An implementation of an HMM, whose emission probabilities are
     parameterized using the word embeddings in the lexicon.
@@ -90,7 +91,7 @@ class HiddenMarkovModel(nn.Module):
         self.eos_t: Optional[int] = tagset.index(EOS_TAG)
         assert self.bos_t is not None    # we need this to exist
         assert self.eos_t is not None    # we need this to exist
-        self.eye: Tensor = torch.eye(self.k)  # identity matrix, used as a collection of one-hot tag vectors
+        self.eye: Tensor = torch.eye(self.k, device=self.device)  # identity matrix, used as a collection of one-hot tag vectors
 
         self.init_params()     # create and initialize params
 
@@ -100,7 +101,6 @@ class HiddenMarkovModel(nn.Module):
         """Get the GPU (or CPU) our code is running on."""
         # Why the hell isn't this already in PyTorch?
         return next(self.parameters()).device
-
 
     def _integerize_sentence(self, sentence: Sentence, corpus: TaggedCorpus) -> List[Tuple[int,Optional[int]]]:
         """Integerize the words and tags of the given sentence, which came from the given corpus."""
@@ -140,7 +140,6 @@ class HiddenMarkovModel(nn.Module):
             x_finite = x[x.isfinite()]
             l2 = l2 + x_finite @ x_finite   # add ||x_finite||^2
         return l2
-
 
     def updateAB(self) -> None:
         """Set the transition and emission matrices A and B, based on the current parameters.
@@ -380,7 +379,6 @@ class HiddenMarkovModel(nn.Module):
 
             # Finally, add likelihood of sentence m to the minibatch objective.
             log_likelihood = log_likelihood + self.log_prob(sentence, corpus)
-
 
     def save(self, destination: Path) -> None:
         import pickle

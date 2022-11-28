@@ -258,17 +258,6 @@ class TaggedCorpus:
 
 # Helper Functions
 
-def is_supervised(sentence: Sentence) -> bool:
-    """Is the given sentence fully supervised?"""
-    return all(tag is not None for word, tag in sentence)
-
-
-def desupervise(sentence: Sentence) -> Sentence:
-    """Make a new version of the sentence, with the tags removed
-    except for BOS_TAG and EOS_TAG."""
-    return Sentence([(word, tag if tag == BOS_TAG or tag == EOS_TAG else None) for (word, tag) in sentence])
-
-
 def tword_str(tword: TWord) -> str:
     """Printable representation of a TWord."""
     word, tag = tword
