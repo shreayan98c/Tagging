@@ -89,7 +89,7 @@ class CRFModel(nn.Module):
         assert self.eos_t is not None  # we need this to exist
         self.eye: Tensor = torch.eye(self.k)  # identity matrix, used as a collection of one-hot tag vectors
 
-        if self.birnn:
+        if self.birnn is "True":
             self.rnn = nn.RNN(self.d, self.d, bidirectional=True)
             self.ua = nn.Linear(self.k * 2 * (self.d + self.k), self.k)
             self.ub = nn.Linear(self.k * (3 * self.d + self.k), self.k)
@@ -130,7 +130,7 @@ class CRFModel(nn.Module):
         WA[:, self.bos_t] = -inf  # correct the BOS_TAG column
         self._WA = nn.Parameter(WA)  # params used to construct transition matrix
 
-        if self.birnn:
+        if self.birnn is "True":
             _ThetaA = 0.01 * torch.rand(self.d)
             self._ThetaA = Parameter(_ThetaA)  # params used to construct transition matrix
 
